@@ -2,9 +2,9 @@ package binance
 
 import "fmt"
 
-func GetInfo() ([]string, float64, int, int) {
-	var sleepTime float64
-	fmt.Print("Enter cooldown requests (In Seconds): ")
+func GetInfo() ([]string, int, int, int, float64) {
+	var sleepTime int
+	fmt.Print("Enter cooldown requests (In Millisecond): ")
 	fmt.Scan(&sleepTime)
 
 	var proxyAmount int
@@ -20,13 +20,17 @@ func GetInfo() ([]string, float64, int, int) {
 
 	fmt.Println("Your proxies:", proxies)
 
-	var userMoney int
+	var user_min_money int
+	fmt.Print("Enter your min balance for order (RUB): ")
+	fmt.Scan(&user_min_money)
+
+	var user_max_money int
 	fmt.Print("Enter your max balance for order (RUB): ")
-	fmt.Scan(&userMoney)
+	fmt.Scan(&user_max_money)
 
-	var needProfit int
-	fmt.Print("Enter min profit: ")
-	fmt.Scan(&needProfit)
+	var need_spread float64
+	fmt.Print("Enter min spread (%): ")
+	fmt.Scan(&need_spread)
 
-	return proxies, sleepTime, userMoney, needProfit
+	return proxies, sleepTime, user_min_money, user_max_money, need_spread
 }

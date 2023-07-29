@@ -9,9 +9,9 @@ import (
 
 func main() {
 	binance.CheckToken()
-	proxies, sleepTime, userMoney, needProfit := binance.GetInfo()
-	fmt.Println(proxies, sleepTime, userMoney, needProfit)
-	go binance.CheckSell(userMoney, needProfit, "USDT", []string{"RosBankNew"}, "http://D6kBsL:7Kqr3J@194.226.60.132:8000")
+	proxies, sleepTime, user_min_money, user_max_money, need_spread := binance.GetInfo()
+	fmt.Println(proxies, sleepTime, user_min_money, user_max_money, need_spread)
+	go binance.CheckSell("USDT", []string{"RosBankNew"}, "http://D6kBsL:7Kqr3J@194.226.60.132:8000")
 	assets := []string{"USDT"}
 	current_proxy_num := 0
 	for {
@@ -21,9 +21,9 @@ func main() {
 			} else {
 				current_proxy_num = 0
 			}
-			go binance.CheckAsset(userMoney, needProfit, asset, []string{"RosBankNew"}, proxies[current_proxy_num])
+			go binance.CheckAsset(user_min_money, user_max_money, need_spread, asset, []string{"RosBankNew"}, proxies[current_proxy_num])
 		}
-		duration := time.Duration(sleepTime * float64(time.Second))
+		duration := time.Duration(sleepTime) * time.Millisecond
 		time.Sleep(duration)
 	}
 

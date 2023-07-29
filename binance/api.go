@@ -19,7 +19,7 @@ import (
 const discordWebhookURL = "https://discord.com/api/webhooks/1131334900272857089/DzxJQ8wD-EMcnl65Ev4ww5I6aVcYxSw25LCihHIloRwU-1anlLKpEzV_1b6w0mMBXY1l"
 
 var sellData []map[string]interface{}
-
+var last_order_id string
 var sellUpdate = time.Now().Format("15:04:05.000000")
 
 type Message struct {
@@ -146,6 +146,7 @@ func CheckToken() {
 		fmt.Println("Token is valid.")
 	} else {
 		fmt.Println("TOKEN INVALID")
+		_, _ = fmt.Scanln()
 		os.Exit(1)
 	}
 }
@@ -354,7 +355,7 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 	return binanceSellInfo, nil
 }
 
-func CheckSell(userMoney int, needProfit int, asset string, bank interface{}, currentSellProxy string) {
+func CheckSell(asset string, bank interface{}, currentSellProxy string) {
 	for {
 		sellData, _ = SellInfo(currentSellProxy, asset, "0", bank.([]string))
 		if len(sellData) > 0 {
@@ -364,7 +365,7 @@ func CheckSell(userMoney int, needProfit int, asset string, bank interface{}, cu
 		time.Sleep(5 * time.Second)
 	}
 }
-func CheckAsset(user_min_limit int, user_max_limit int, needProfit int, asset string, bank interface{}, currentBuyProxy string) {
+func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, asset string, bank interface{}, currentBuyProxy string) {
 	buyData, _ := BuyInfo(currentBuyProxy, asset, "0", bank.([]string))
 	// buyData = buyData[:3]
 	if len(buyData) > 0 {
@@ -376,8 +377,8 @@ func CheckAsset(user_min_limit int, user_max_limit int, needProfit int, asset st
 			// fmt.Println(sellData)
 			resultOptions := []interface{}{}
 			for _, buyOffer := range buyData {
-				buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
-				// buyPrice := 80.00
+				// buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
+				buyPrice := 90.00
 				buyMinLimit, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
 				buyMaxLimit, _ := strconv.ParseFloat(buyOffer["maxLimit"].(string), 64)
 				if buyMinLimit > float64(user_max_limit) {
@@ -386,7 +387,6 @@ func CheckAsset(user_min_limit int, user_max_limit int, needProfit int, asset st
 				possiblyBuyAmount := []interface{}{}
 				for _, sellOffer := range sellData {
 					sellPrice, _ := strconv.ParseFloat(sellOffer["price"].(string), 64)
-					// fmt.Println(buyPrice, sellPrice)
 					if sellPrice > buyPrice {
 						sellMinLimit, _ := strconv.ParseFloat(sellOffer["minLimit"].(string), 64)
 						sellMaxLimit, _ := strconv.ParseFloat(sellOffer["maxLimit"].(string), 64)
@@ -397,14 +397,14 @@ func CheckAsset(user_min_limit int, user_max_limit int, needProfit int, asset st
 
 						if buyMaxLimit == sellMinLimit && (sellMinLimit > float64(user_min_limit) || sellMinLimit < float64(user_max_limit)) {
 							canBuy := buyMaxLimit
-							result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer}
+							spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
+							result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
 							resultOptions = append(resultOptions, result)
-							fmt.Println("1")
 						} else if buyMinLimit == sellMaxLimit && (sellMaxLimit > float64(user_min_limit) || sellMaxLimit < float64(user_max_limit)) {
 							canBuy := buyMinLimit
-							result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer}
+							spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
+							result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
 							resultOptions = append(resultOptions, result)
-							fmt.Println("2")
 						} else {
 							possiblyBuyAmount = append(possiblyBuyAmount, []interface{}{buyMinLimit, 'b'})
 							possiblyBuyAmount = append(possiblyBuyAmount, []interface{}{buyMaxLimit, 'b'})
@@ -416,7 +416,8 @@ func CheckAsset(user_min_limit int, user_max_limit int, needProfit int, asset st
 							possibly_buy_interval := []float64{possiblyBuyAmount[1].([]interface{})[0].(float64), possiblyBuyAmount[2].([]interface{})[0].(float64)}
 							if float64(user_min_limit) <= possibly_buy_interval[0] && possibly_buy_interval[0] <= float64(user_max_limit) {
 								canBuy := math.Min(float64(user_max_limit), possibly_buy_interval[1])
-								result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer}
+								spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
+								result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
 								resultOptions = append(resultOptions, result)
 							}
 
@@ -426,24 +427,28 @@ func CheckAsset(user_min_limit int, user_max_limit int, needProfit int, asset st
 				}
 			}
 			sort.Slice(resultOptions, func(i, j int) bool {
-				return resultOptions[i].([]interface{})[0].(float64) > resultOptions[j].([]interface{})[0].(float64)
+				return resultOptions[i].([]interface{})[4].(float64) > resultOptions[j].([]interface{})[4].(float64)
 			})
 			if len(resultOptions) > 0 {
 				profit := resultOptions[0].([]interface{})[0].(float64)
-				if profit >= float64(needProfit) {
-					now := time.Now().Format("15:04:05.000000")
-					fmt.Println(now, "| Trying to create Order. Profit:", profit)
-					orderInfo := resultOptions[0].([]interface{})[2].(map[string]interface{})
-					canBuy := resultOptions[0].([]interface{})[1].(float64)
-					canBuyStr := strconv.FormatFloat(canBuy, 'f', -1, 64)
-					response, _ := MakeOrder(orderInfo["id"].(string), orderInfo["price"].(string), canBuyStr, asset)
-					time_after_response := time.Now().Format("15:04:05.000000")
-					fmt.Println(time_after_response, "|", orderInfo["id"], orderInfo["price"], orderInfo["amount"], asset, orderInfo["link"])
-					fmt.Println(time_after_response, "|", response)
-					if response["success"] == true {
-						go SendWebhook(fmt.Sprintf("%v | Profit: %v руб. | Amount: %v RUB | Successfully created!", time_after_response, math.Round(profit), canBuyStr), "#46b000")
-					} else {
-						go SendWebhook(fmt.Sprintf("%v | Profit: %v руб. | Amount: %v RUB | Message: %v", time_after_response, math.Round(profit), canBuyStr, response["message"]), "#510A1F")
+				spread := resultOptions[0].([]interface{})[4].(float64)
+				order_info := resultOptions[0].([]interface{})[2].(map[string]interface{})
+				if last_order_id != order_info["id"].(string) {
+					if spread >= float64(need_spread) {
+						now := time.Now().Format("15:04:05.000000")
+						fmt.Println(now, "| Trying to create Order. Spread:", need_spread)
+						canBuy := resultOptions[0].([]interface{})[1].(float64)
+						canBuyStr := strconv.FormatFloat(canBuy, 'f', -1, 64)
+						response, _ := MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset)
+						time_after_response := time.Now().Format("15:04:05.000000")
+						fmt.Println(time_after_response, "|", order_info["id"], order_info["price"], order_info["amount"], asset, order_info["link"])
+						fmt.Println(time_after_response, "|", response)
+						if response["success"] == true {
+							go SendWebhook(fmt.Sprintf("[%v%%] %v | Profit: %v руб. | Amount: %v RUB | Successfully created!", spread, time_after_response, math.Round(profit), canBuyStr), "#46b000")
+							last_order_id = order_info["id"].(string)
+						} else {
+							go SendWebhook(fmt.Sprintf("[%v%%] %v | Profit: %v руб. | Amount: %v RUB | Message: %v", spread, time_after_response, math.Round(profit), canBuyStr, response["message"]), "#510A1F")
+						}
 					}
 				}
 			}
