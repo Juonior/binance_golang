@@ -377,8 +377,8 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 			// fmt.Println(sellData)
 			resultOptions := []interface{}{}
 			for _, buyOffer := range buyData {
-				// buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
-				buyPrice := 90.00
+				buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
+				// buyPrice := 90.00
 				buyMinLimit, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
 				buyMaxLimit, _ := strconv.ParseFloat(buyOffer["maxLimit"].(string), 64)
 				if buyMinLimit > float64(user_max_limit) {
