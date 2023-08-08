@@ -151,7 +151,7 @@ func CheckToken() {
 	}
 }
 
-func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset string, proxy string) (map[string]interface{}, error, time.Duration) {
+func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset string) (map[string]interface{}, error, time.Duration) {
 	start := time.Now()
 	settings := make(map[string]interface{})
 	file, err := ioutil.ReadFile("settings.json")
@@ -188,13 +188,14 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 	req.Header.Set("Content-Type", "application/json")
 
 	// Parse proxy URL
-	proxyURL, err := url.Parse(proxy)
-	if err != nil {
-		return nil, err, 0
-	}
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.Proxy = http.ProxyURL(proxyURL)
-	client := &http.Client{Transport: t}
+	// proxyURL, err := url.Parse(proxy)
+	// if err != nil {
+	// 	return nil, err, 0
+	// }
+	// t := http.DefaultTransport.(*http.Transport).Clone()
+	// t.Proxy = http.ProxyURL(proxyURL)
+	// client := &http.Client{Transport: t}
+	client := &http.Client{}
 
 	// Send the request
 	resp, err := client.Do(req)
@@ -439,21 +440,21 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 						fmt.Println(now, "| Trying to create Order. Spread:", need_spread)
 						canBuy := resultOptions[0].([]interface{})[1].(float64)
 						canBuyStr := strconv.FormatFloat(canBuy, 'f', -1, 64)
-						response, _, elapsed_time := MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, currentBuyProxy)
+						last_order_id = order_info["id"].(string)
+						response, _, elapsed_time := MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset)
 						time_after_response := time.Now().Format("15:04:05.000000")
 						fmt.Println(time_after_response, "|", order_info["id"], order_info["price"], order_info["amount"], asset, order_info["link"])
 						fmt.Println(time_after_response, "|", response)
 						if response["success"] == true {
-							go SendWebhook(fmt.Sprintf("[EN][%v%%] %v | Profit: %v руб. | Amount: %v RUB | Successfully created! | Request time: %v", spread, time_after_response, math.Round(profit), canBuyStr, elapsed_time), "#46b000")
-							last_order_id = order_info["id"].(string)
+							go SendWebhook(fmt.Sprintf("[JP][%v%%] %v | Profit: %v руб. | Amount: %v RUB | Successfully created! | Request time: %v", spread, time_after_response, math.Round(profit), canBuyStr, elapsed_time), "#46b000")
 						} else {
-							go SendWebhook(fmt.Sprintf("[EN] [%v%%] %v | Profit: %v руб. | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), canBuyStr, response["message"], elapsed_time), "#510A1F")
+							go SendWebhook(fmt.Sprintf("[JP] [%v%%] %v | Profit: %v руб. | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), canBuyStr, response["message"], elapsed_time), "#510A1F")
 						}
 					}
 				}
 			}
 		}
 	} else {
-		fmt.Println("BuyData None")
+		fmt.Println("BuyData None", currentBuyProxy)
 	}
 }
