@@ -151,12 +151,12 @@ func CheckToken() {
 	}
 }
 
-func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset string) (map[string]interface{}, error, time.Duration) {
+func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset string, spread float64, profit float64) {
 	start := time.Now()
 	settings := make(map[string]interface{})
 	file, err := ioutil.ReadFile("settings.json")
 	if err != nil {
-		return nil, err, 0
+		return
 	} else {
 		_ = json.Unmarshal(file, &settings)
 	}
@@ -173,12 +173,12 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 	// Convert payload to JSON
 	requestBody, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err, 0
+		return
 	}
 	// Create POST request to makeOrder endpoint
 	req, err := http.NewRequest("POST", "https://p2p.binance.com/bapi/c2c/v2/private/c2c/order-match/makeOrder", bytes.NewBuffer(requestBody))
 	if err != nil {
-		return nil, err, 0
+		return
 	}
 	// Set necessary headers
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 YaBrowser/23.5.2.625 Yowser/2.5 Safari/537.36")
@@ -200,7 +200,7 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 	// Send the request
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err, 0
+		return
 	}
 	defer resp.Body.Close()
 
@@ -208,13 +208,19 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 	var response map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		return nil, err, 0
+		return
 	}
 
 	// Return the response
 	elapsed := time.Since(start)
 	// fmt.Printf("Execution time: %s", elapsed)
-	return response, nil, elapsed
+
+	time_after_response := time.Now().Format("15:04:05.000000")
+	if response["success"] == true {
+		go SendWebhook(fmt.Sprintf("[JP][%v%%] %v | Profit: %v руб. | Amount: %v RUB | Successfully created! | Request time: %v", spread, time_after_response, math.Round(profit), totalAmount, elapsed), "#46b000")
+	} else {
+		go SendWebhook(fmt.Sprintf("[JP] [%v%%] %v | Profit: %v руб. | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), totalAmount, response["message"], elapsed), "#510A1F")
+	}
 }
 func BuyInfo(proxy string, asset string, transAmount string, payTypes []string) ([]map[string]interface{}, error) {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
@@ -368,7 +374,7 @@ func CheckSell(asset string, bank interface{}, currentSellProxy string) {
 }
 func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, asset string, bank interface{}, currentBuyProxy string) {
 	buyData, _ := BuyInfo(currentBuyProxy, asset, "0", bank.([]string))
-	// buyData = buyData[:3]
+	// buyData = buyData[:1]
 	if len(buyData) > 0 {
 		if len(sellData) > 0 {
 			if asset == "USDT" {
@@ -379,7 +385,7 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 			resultOptions := []interface{}{}
 			for _, buyOffer := range buyData {
 				buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
-				// buyPrice := 90.00
+				// buyPrice := 80.00
 				buyMinLimit, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
 				buyMaxLimit, _ := strconv.ParseFloat(buyOffer["maxLimit"].(string), 64)
 				if buyMinLimit > float64(user_max_limit) {
@@ -436,20 +442,14 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 				order_info := resultOptions[0].([]interface{})[2].(map[string]interface{})
 				if last_order_id != order_info["id"].(string) {
 					if spread >= float64(need_spread) {
-						now := time.Now().Format("15:04:05.000000")
-						fmt.Println(now, "| Trying to create Order. Spread:", need_spread)
 						canBuy := resultOptions[0].([]interface{})[1].(float64)
 						canBuyStr := strconv.FormatFloat(canBuy, 'f', -1, 64)
 						last_order_id = order_info["id"].(string)
-						response, _, elapsed_time := MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset)
-						time_after_response := time.Now().Format("15:04:05.000000")
-						fmt.Println(time_after_response, "|", order_info["id"], order_info["price"], order_info["amount"], asset, order_info["link"])
-						fmt.Println(time_after_response, "|", response)
-						if response["success"] == true {
-							go SendWebhook(fmt.Sprintf("[JP][%v%%] %v | Profit: %v руб. | Amount: %v RUB | Successfully created! | Request time: %v", spread, time_after_response, math.Round(profit), canBuyStr, elapsed_time), "#46b000")
-						} else {
-							go SendWebhook(fmt.Sprintf("[JP] [%v%%] %v | Profit: %v руб. | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), canBuyStr, response["message"], elapsed_time), "#510A1F")
-						}
+						go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit)
+						time.Sleep(5 * time.Millisecond)
+						go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit)
+						time.Sleep(5 * time.Millisecond)
+						go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit)
 					}
 				}
 			}
