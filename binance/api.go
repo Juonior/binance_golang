@@ -531,9 +531,9 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 						canBuy := resultOptions[0].([]interface{})[1].(float64)
 						canBuyStr := strconv.FormatFloat(canBuy, 'f', -1, 64)
 						last_order_id = order_info["id"].(string)
-						time.Sleep(20 * time.Millisecond)
-						for i := 0; i < 5; i++ {
-							go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit)
+						// time.Sleep(115 * time.Millisecond)
+						for i := 0; i < 3; i++ {
+							go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit, ipAddresses_api[i])
 						}
 					}
 				}
