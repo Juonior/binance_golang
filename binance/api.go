@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math"
+	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -21,6 +20,7 @@ const discordWebhookURL = "https://discord.com/api/webhooks/1131334900272857089/
 var sellData []map[string]interface{}
 var last_order_id string
 var sellUpdate = time.Now().Format("15:04:05.000000")
+var ipAddresses_api []string
 
 type Message struct {
 	Content string  `json:"content,omitempty"`
@@ -28,23 +28,54 @@ type Message struct {
 }
 
 type Embed struct {
-	Title       string  `json:"title,omitempty"`
-	Description string  `json:"description,omitempty"`
-	Fields      []Field `json:"fields,omitempty"`
-	Color       int     `json:"color,omitempty"`
+	Title       string     `json:"title,omitempty"`
+	Description string     `json:"description,omitempty"`
+	Fields      []Field    `json:"fields,omitempty"`
+	Color       int        `json:"color,omitempty"`
+	Thumbnail   *Thumbnail `json:"thumbnail,omitempty"`
+	Footer      *Footer    `json:"footer,omitempty"`
+}
+type Thumbnail struct {
+	URL string `json:"url,omitempty"`
 }
 
+type Footer struct {
+	Text string `json:"text,omitempty"`
+}
 type Field struct {
 	Name  string `json:"name,omitempty"`
 	Value string `json:"value,omitempty"`
 }
 
-func SendWebhook(title string, color string) {
+func SendWebhook(status string, amount string, profit float64, spread float64, price string, orderTime, requestTime, ip string, color string) {
 	embed := Embed{
-		Title: title,
+		Title: fmt.Sprintf("[JP] %v", status),
 		Color: parseColor(color),
+		Fields: []Field{
+			{
+				Name:  "Buy Amount",
+				Value: fmt.Sprintf("%v руб.", amount),
+			},
+			{
+				Name:  "Profit",
+				Value: fmt.Sprintf("%v руб.", profit),
+			},
+			{
+				Name:  "Spread",
+				Value: fmt.Sprintf("%v%%", spread),
+			},
+			{
+				Name:  "Price",
+				Value: fmt.Sprintf("%v руб.", price),
+			},
+		},
+		Thumbnail: &Thumbnail{
+			URL: "https://cdn-icons-png.flaticon.com/512/6163/6163319.png",
+		},
+		Footer: &Footer{
+			Text: fmt.Sprintf("%v  | %v | %v", orderTime, requestTime, ip),
+		},
 	}
-
 	message := Message{
 		Embeds: []Embed{embed},
 	}
@@ -73,6 +104,42 @@ func parseColor(color string) int {
 		return 0
 	}
 	return value
+}
+
+func GetLocalAddresses() []string {
+	var ipAddresses []string
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		fmt.Println("Failed to get network interfaces:", err)
+		return nil
+	}
+
+	// Перебираем каждый сетевой интерфейс
+	for _, i := range interfaces {
+		// Получаем адреса для текущего интерфейса
+		addrs, err := i.Addrs()
+		if err != nil {
+			fmt.Println("Failed to get addresses for interface", i.Name, ":", err)
+			continue
+		}
+
+		// Перебираем каждый адрес для текущего интерфейса
+		for _, addr := range addrs {
+			// Проверяем, является ли адрес IP-адресом
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+
+			// Проверяем, является ли адрес локальным
+			if !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+				// Добавляем IP-адрес в массив
+				ipAddresses = append(ipAddresses, ipNet.IP.String())
+				ipAddresses_api = append(ipAddresses, ipNet.IP.String())
+			}
+		}
+	}
+	return ipAddresses
 }
 func CheckToken() {
 	banks_exists := [3]string{"RosBankNew", "TinkoffNew", "PostBankNew"}
@@ -151,7 +218,7 @@ func CheckToken() {
 	}
 }
 
-func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset string, spread float64, profit float64) {
+func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset string, spread float64, profit float64, localIP string) {
 	start := time.Now()
 	settings := make(map[string]interface{})
 	file, err := ioutil.ReadFile("settings.json")
@@ -187,15 +254,20 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 	req.Header.Set("Cookie", settings["cookie"].(string))
 	req.Header.Set("Content-Type", "application/json")
 
-	// Parse proxy URL
-	// proxyURL, err := url.Parse(proxy)
-	// if err != nil {
-	// 	return nil, err, 0
-	// }
-	// t := http.DefaultTransport.(*http.Transport).Clone()
-	// t.Proxy = http.ProxyURL(proxyURL)
-	// client := &http.Client{Transport: t}
-	client := &http.Client{}
+	dialer := &net.Dialer{
+		LocalAddr: &net.TCPAddr{
+			IP: net.ParseIP(localIP),
+		},
+		Timeout: time.Minute * 2,
+	}
+
+	// Create an HTTP client with the custom dialer
+	client := &http.Client{
+		Transport: &http.Transport{
+			Dial: dialer.Dial,
+		},
+		Timeout: time.Minute * 5,
+	}
 
 	// Send the request
 	resp, err := client.Do(req)
@@ -214,25 +286,17 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 	// Return the response
 	elapsed := time.Since(start)
 	// fmt.Printf("Execution time: %s", elapsed)
-
+	// status string, amount string, profit string, spread string, price string, orderTime, requestTime, color string
 	time_after_response := time.Now().Format("15:04:05.000000")
 	if response["success"] == true {
-		go SendWebhook(fmt.Sprintf("[JP][%v%%] %v | Profit: %v руб. | Amount: %v RUB | Successfully created! | Request time: %v", spread, time_after_response, math.Round(profit), totalAmount, elapsed), "#46b000")
+		go SendWebhook("Successful creation order Binance", totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), localIP, "#46b000")
 	} else {
-		go SendWebhook(fmt.Sprintf("[JP] [%v%%] %v | Profit: %v руб. | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), totalAmount, response["message"], elapsed), "#510A1F")
+		go SendWebhook(fmt.Sprintf("%v", response["message"]), totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), localIP, "#510A1F")
+		// go SendWebhook(fmt.Sprintf("[JP] [%v%%] %v | Profit: %v руб. | Price: %v RUB | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), matchPrice, totalAmount, response["message"], elapsed), "#510A1F")
 	}
 }
-func BuyInfo(proxy string, asset string, transAmount string, payTypes []string) ([]map[string]interface{}, error) {
+func BuyInfo(localIP string, asset string, transAmount string, payTypes []string) []map[string]interface{} {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
-	proxies := map[string]string{
-		"http":  proxy,
-		"https": proxy,
-	}
-
-	proxyURL, err := url.Parse(proxies["http"])
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	payload := map[string]interface{}{
 		"asset":         asset,
@@ -249,25 +313,34 @@ func BuyInfo(proxy string, asset string, transAmount string, payTypes []string) 
 
 	requestBody, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
+	dialer := &net.Dialer{
+		LocalAddr: &net.TCPAddr{
+			IP: net.ParseIP(localIP),
+		},
+		Timeout: time.Minute * 5,
+	}
+
+	// Create an HTTP client with the custom dialer
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			Proxy: http.ProxyURL(proxyURL),
+			Dial: dialer.Dial,
 		},
+		Timeout: time.Minute * 5,
 	}
 
 	response, err := httpClient.Post(priceInfoURL, "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	defer response.Body.Close()
 
 	var data map[string]interface{}
 	err = json.NewDecoder(response.Body).Decode(&data)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
 	var binanceSellInfo []map[string]interface{}
@@ -289,21 +362,11 @@ func BuyInfo(proxy string, asset string, transAmount string, payTypes []string) 
 		binanceSellInfo = append(binanceSellInfo, orderInfo)
 	}
 
-	return binanceSellInfo, nil
+	return binanceSellInfo
 }
 
-func SellInfo(proxy string, asset string, transAmount string, payTypes []string) ([]map[string]interface{}, error) {
+func SellInfo(localIP string, asset string, transAmount string, payTypes []string) ([]map[string]interface{}, error) {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
-	proxies := map[string]string{
-		"http":  proxy,
-		"https": proxy,
-	}
-
-	proxyURL, err := url.Parse(proxies["http"])
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	payload := map[string]interface{}{
 		"asset":         asset,
 		"transAmount":   transAmount,
@@ -322,9 +385,17 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 		return nil, err
 	}
 
+	dialer := &net.Dialer{
+		LocalAddr: &net.TCPAddr{
+			IP: net.ParseIP(localIP),
+		},
+		Timeout: time.Second * 5,
+	}
+
+	// Create an HTTP client with the custom dialer
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			Proxy: http.ProxyURL(proxyURL),
+			Dial: dialer.Dial,
 		},
 	}
 
@@ -362,9 +433,9 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 	return binanceSellInfo, nil
 }
 
-func CheckSell(asset string, bank interface{}, currentSellProxy string) {
+func CheckSell(asset string, bank interface{}, currentSellIp string) {
 	for {
-		sellData, _ = SellInfo(currentSellProxy, asset, "0", bank.([]string))
+		sellData, _ = SellInfo(currentSellIp, asset, "0", bank.([]string))
 		if len(sellData) > 0 {
 			sellData = sellData[2:]
 		}
@@ -373,7 +444,7 @@ func CheckSell(asset string, bank interface{}, currentSellProxy string) {
 	}
 }
 func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, asset string, bank interface{}, currentBuyProxy string) {
-	buyData, _ := BuyInfo(currentBuyProxy, asset, "0", bank.([]string))
+	buyData := BuyInfo(currentBuyProxy, asset, "0", bank.([]string))
 	// buyData = buyData[:1]
 	if len(buyData) > 0 {
 		if len(sellData) > 0 {
@@ -460,9 +531,9 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 						canBuy := resultOptions[0].([]interface{})[1].(float64)
 						canBuyStr := strconv.FormatFloat(canBuy, 'f', -1, 64)
 						last_order_id = order_info["id"].(string)
-						time.Sleep(1 * time.Millisecond)
-						for i := 0; i < 5; i++ {
-							go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit)
+						// time.Sleep(115 * time.Millisecond)
+						for i := 0; i < 3; i++ {
+							go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit, ipAddresses_api[i])
 						}
 
 					}
