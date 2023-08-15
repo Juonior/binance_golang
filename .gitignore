@@ -7,7 +7,9 @@
 *.dll
 *.so
 *.dylib
-
+test_buy.go
+test.go
+yee.py
 # Test binary, built with `go test -c`
 *.test
 
