@@ -535,7 +535,6 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 						for i := 0; i < 3; i++ {
 							go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit, ipAddresses_api[i])
 						}
-
 					}
 				}
 			}
