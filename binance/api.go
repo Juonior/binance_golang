@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -363,7 +364,7 @@ func BuyInfo(localIP string, asset string, transAmount string, payTypes []string
 	return binanceSellInfo
 }
 
-func SellInfo(localIP string, asset string, transAmount string, payTypes []string) ([]map[string]interface{}, error) {
+func SellInfo(proxy string, asset string, transAmount string, payTypes []string) ([]map[string]interface{}, error) {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 	payload := map[string]interface{}{
 		"asset":         asset,
@@ -383,22 +384,33 @@ func SellInfo(localIP string, asset string, transAmount string, payTypes []strin
 		return nil, err
 	}
 
-	dialer := &net.Dialer{
-		LocalAddr: &net.TCPAddr{
-			IP: net.ParseIP(localIP),
-		},
-		Timeout: time.Second * 1,
+	proxyURL, err := url.Parse(proxy)
+	if err != nil {
+		return nil, err
 	}
 
-	// Create an HTTP client with the custom dialer
-	httpClient := &http.Client{
+	client := &http.Client{
 		Transport: &http.Transport{
-			Dial: dialer.Dial,
+			Proxy: http.ProxyURL(proxyURL),
 		},
-		Timeout: time.Second * 1,
 	}
 
-	response, err := httpClient.Post(priceInfoURL, "application/json", bytes.NewBuffer(requestBody))
+	// dialer := &net.Dialer{
+	// 	LocalAddr: &net.TCPAddr{
+	// 		IP: net.ParseIP(localIP),
+	// 	},
+	// 	Timeout: time.Second * 1,
+	// }
+
+	// // Create an HTTP client with the custom dialer
+	// httpClient := &http.Client{
+	// 	Transport: &http.Transport{
+	// 		Dial: dialer.Dial,
+	// 	},
+	// 	Timeout: time.Second * 1,
+	// }
+
+	response, err := client.Post(priceInfoURL, "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
