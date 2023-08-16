@@ -1,23 +1,21 @@
 package binance
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 )
 
 func GetInfo() ([]string, int, int, int, float64) {
 	var count int
 	fmt.Print("Введите количество прокси: ")
-	fmt.Scan(&count)
+	fmt.Scanln(&count)
 	proxies := make([]string, count)
 
 	// Ввод адресов прокси
-	scanner := bufio.NewScanner(os.Stdin)
 	for i := 0; i < count; i++ {
-		fmt.Printf("Введите прокси #%d: ", i+1)
-		scanner.Scan()
-		proxies[i] = scanner.Text()
+		var proxy string
+		fmt.Print("Введите прокси: ")
+		fmt.Scanln(&proxy)
+		proxies[i] = proxy
 	}
 	var sleepTime int
 	fmt.Print("Enter cooldown requests (In Millisecond): ")

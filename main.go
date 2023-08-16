@@ -8,12 +8,12 @@ import (
 )
 
 func main() {
-	// binance.CheckToken()
+	binance.CheckToken()
 	proxies, sleepTime, user_min_money, user_max_money, need_spread := binance.GetInfo()
 	fmt.Println(len(proxies), "Proxies:", proxies)
 	fmt.Println(sleepTime, user_min_money, user_max_money, need_spread)
-	go binance.CheckSell("USDT", []string{"RosBankNew"}, "http://germanshulgapro:RBpNmuqjkT@109.238.200.222:50100")
-	assets := []string{"USDT"}
+	go binance.CheckSell("BTC", []string{"RosBankNew"}, "http://germanshulgapro:RBpNmuqjkT@109.238.200.222:50100")
+	assets := []string{"BTC"}
 	current_proxy_num := 0
 	for {
 		for _, asset := range assets {
