@@ -393,7 +393,7 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 	// buyData = buyData[:1]
 	if len(buyData) > 0 {
 		if len(sellData) > 0 {
-			if asset == "USDT" {
+			if asset == "BTC" {
 				now := time.Now().Format("15:04:05.000000")
 				fmt.Println(now, "|", asset, "| BUY:", buyData[0]["price"], "| SELL:", sellData[0]["price"], "| SELL UPDATE:", sellUpdate)
 			}
