@@ -16,7 +16,8 @@ import (
 	"time"
 )
 
-const discordWebhookURL = "https://discord.com/api/webhooks/1131334900272857089/DzxJQ8wD-EMcnl65Ev4ww5I6aVcYxSw25LCihHIloRwU-1anlLKpEzV_1b6w0mMBXY1l"
+const discordSuccessURL = "https://discord.com/api/webhooks/1131334900272857089/DzxJQ8wD-EMcnl65Ev4ww5I6aVcYxSw25LCihHIloRwU-1anlLKpEzV_1b6w0mMBXY1l"
+const discordMonitorURL = "https://discord.com/api/webhooks/1142911381134393447/Z-YLp-wI-ObOWmYsEMzPapl7IA-M6kM-Rl4dRIExxYj1PZRpWnGcroK54u8PjP0C4MOG"
 
 var sellData []map[string]interface{}
 var last_order_id string
@@ -48,6 +49,17 @@ type Field struct {
 	Value string `json:"value,omitempty"`
 }
 
+func formatNum(numFloat float64) string {
+	num := fmt.Sprintf("%v", numFloat)
+	formattedStr := ""
+	for i := 0; i < len(num); i++ {
+		formattedStr += string(num[i])
+		if (len(num)-i-1)%3 == 0 && i != len(num)-1 {
+			formattedStr += " "
+		}
+	}
+	return formattedStr
+}
 func SendWebhook(status string, amount string, profit float64, spread float64, price string, orderTime, requestTime, ip string, color string) {
 	embed := Embed{
 		Title: fmt.Sprintf("[JP] %v", status),
@@ -87,7 +99,61 @@ func SendWebhook(status string, amount string, profit float64, spread float64, p
 		return
 	}
 
-	resp, err := http.Post(discordWebhookURL, "application/json", strings.NewReader(string(body)))
+	resp, err := http.Post(discordSuccessURL, "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		fmt.Println("Error sending webhook:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("Webhook sent successfully.")
+}
+
+func SendWebhookMonitor(amount float64, spread float64, price string, fiat string, minlim float64, maxlim float64, trader string, color string) {
+	embed := Embed{
+		Title: "Binance Order",
+		Color: parseColor(color),
+		Fields: []Field{
+			{
+				Name:  "Amount",
+				Value: fmt.Sprintf("%v руб.", formatNum(amount)),
+			},
+			{
+				Name:  "Spread",
+				Value: fmt.Sprintf("%v%%", spread),
+			},
+			{
+				Name:  "Price",
+				Value: fmt.Sprintf("%v руб.", price),
+			},
+			{
+				Name:  "Limits",
+				Value: fmt.Sprintf("%v - %v", formatNum(minlim), formatNum(maxlim)),
+			},
+			{
+				Name:  "Trader",
+				Value: fmt.Sprintf("%v", trader),
+			},
+			{
+				Name:  "Crypto-Fiat",
+				Value: fmt.Sprintf("%v-RUB", fiat),
+			},
+		},
+		Thumbnail: &Thumbnail{
+			URL: "https://cdn-icons-png.flaticon.com/512/6163/6163319.png",
+		},
+	}
+	message := Message{
+		Embeds: []Embed{embed},
+	}
+
+	body, err := json.Marshal(message)
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return
+	}
+
+	resp, err := http.Post(discordMonitorURL, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		fmt.Println("Error sending webhook:", err)
 		return
@@ -541,11 +607,34 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 					if spread >= float64(need_spread) {
 						canBuy := resultOptions[0].([]interface{})[1].(float64)
 						canBuyStr := strconv.FormatFloat(canBuy, 'f', -1, 64)
+						fmt.Println(order_info)
 						last_order_id = order_info["id"].(string)
-						// time.Sleep(115 * time.Millisecond)
 						for i := 0; i < 3; i++ {
 							go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit, ipAddresses_api[i])
 						}
+						amount, err := strconv.ParseFloat(order_info["amount"].(string), 64)
+						if err != nil {
+							fmt.Println("Error converting string to float64:", err)
+							return
+						}
+						price, err := strconv.ParseFloat(order_info["price"].(string), 64)
+						if err != nil {
+							fmt.Println("Error converting string to float64:", err)
+							return
+						}
+						minlim, err := strconv.ParseFloat(order_info["minLimit"].(string), 64)
+						if err != nil {
+							fmt.Println("Error converting string to float64:", err)
+							return
+						}
+						maxlim, err := strconv.ParseFloat(order_info["maxLimit"].(string), 64)
+						if err != nil {
+							fmt.Println("Error converting string to float64:", err)
+							return
+						}
+						amount_in_rub := math.Round(amount) * math.Round(price)
+						merchant_name := order_info["name"].(string)
+						SendWebhookMonitor(math.Round(amount_in_rub), spread, order_info["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, "67008c")
 					}
 				}
 			}
