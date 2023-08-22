@@ -439,6 +439,14 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 						for i := 0; i < 3; i++ {
 							go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit)
 						}
+						amount, _ := strconv.ParseFloat(order_info["amount"].(string), 64)
+						price, _ := strconv.ParseFloat(order_info["price"].(string), 64)
+						minlim, _ := strconv.ParseFloat(order_info["minLimit"].(string), 64)
+						maxlim, _ := strconv.ParseFloat(order_info["maxLimit"].(string), 64)
+						amount_in_rub := math.Round(amount) * math.Round(price)
+						merchant_name := order_info["name"].(string)
+						SendWebhookMonitor(math.Round(amount_in_rub), spread, order_info["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, "67008c")
+
 					}
 				}
 			}
