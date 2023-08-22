@@ -95,6 +95,59 @@ func SendWebhook(status string, amount string, profit float64, spread float64, p
 
 	fmt.Println("Webhook sent successfully.")
 }
+func SendWebhookMonitor(amount float64, spread float64, price string, fiat string, minlim float64, maxlim float64, trader string, color string) {
+	embed := Embed{
+		Title: "Binance Order",
+		Color: parseColor(color),
+		Fields: []Field{
+			{
+				Name:  "Amount",
+				Value: fmt.Sprintf("%v руб.", formatNum(amount)),
+			},
+			{
+				Name:  "Spread",
+				Value: fmt.Sprintf("%v%%", spread),
+			},
+			{
+				Name:  "Price",
+				Value: fmt.Sprintf("%v руб.", price),
+			},
+			{
+				Name:  "Limits",
+				Value: fmt.Sprintf("%v - %v", formatNum(minlim), formatNum(maxlim)),
+			},
+			{
+				Name:  "Trader",
+				Value: fmt.Sprintf("%v", trader),
+			},
+			{
+				Name:  "Crypto-Fiat",
+				Value: fmt.Sprintf("%v-RUB", fiat),
+			},
+		},
+		Thumbnail: &Thumbnail{
+			URL: "https://cdn-icons-png.flaticon.com/512/6163/6163319.png",
+		},
+	}
+	message := Message{
+		Embeds: []Embed{embed},
+	}
+
+	body, err := json.Marshal(message)
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return
+	}
+
+	resp, err := http.Post(discordMonitorURL, "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		fmt.Println("Error sending webhook:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("Webhook sent successfully.")
+}
 func parseColor(color string) int {
 	color = strings.TrimPrefix(color, "#")
 	var value int
