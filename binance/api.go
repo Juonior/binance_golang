@@ -16,6 +16,7 @@ import (
 )
 
 const discordWebhookURL = "https://discord.com/api/webhooks/1131334900272857089/DzxJQ8wD-EMcnl65Ev4ww5I6aVcYxSw25LCihHIloRwU-1anlLKpEzV_1b6w0mMBXY1l"
+const discordMonitorURL = "https://discord.com/api/webhooks/1142911381134393447/Z-YLp-wI-ObOWmYsEMzPapl7IA-M6kM-Rl4dRIExxYj1PZRpWnGcroK54u8PjP0C4MOG"
 
 var sellData []map[string]interface{}
 var last_order_id string
@@ -47,6 +48,17 @@ type Field struct {
 	Value string `json:"value,omitempty"`
 }
 
+func formatNum(numFloat float64) string {
+	num := fmt.Sprintf("%v", numFloat)
+	formattedStr := ""
+	for i := 0; i < len(num); i++ {
+		formattedStr += string(num[i])
+		if (len(num)-i-1)%3 == 0 && i != len(num)-1 {
+			formattedStr += " "
+		}
+	}
+	return formattedStr
+}
 func SendWebhook(status string, amount string, profit float64, spread float64, price string, orderTime, requestTime, color string) {
 	embed := Embed{
 		Title: fmt.Sprintf("[JP] %v", status),
