@@ -539,21 +539,20 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 				if buyMinLimit > float64(user_max_limit) {
 					continue
 				}
-				possiblyBuyAmount := []interface{}{}
 				for _, sellOffer := range sellData {
 					sellPrice, _ := strconv.ParseFloat(sellOffer["price"].(string), 64)
 					if sellPrice > buyPrice {
-								spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
-								canBuy := math.Min(float64(user_max_limit), buyMaxLimit)
-								if spread > 5 {
-									canBuy = math.Min(canBuy, 90000)
-								}
-								result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
-								if (spread < 5) || (spread > 5 && canBuy <= 90000) {
-									resultOptions = append(resultOptions, result)
-								}
-							}
-
+						if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
+							continue
+						}
+						spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
+						canBuy := math.Min(float64(user_max_limit), buyMaxLimit)
+						if spread > 5 {
+							canBuy = math.Min(canBuy, 90000)
+						}
+						result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
+						if (spread < 5) || (spread > 5 && canBuy <= 90000) {
+							resultOptions = append(resultOptions, result)
 						}
 
 					}
