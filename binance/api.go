@@ -543,45 +543,8 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 				for _, sellOffer := range sellData {
 					sellPrice, _ := strconv.ParseFloat(sellOffer["price"].(string), 64)
 					if sellPrice > buyPrice {
-						sellMinLimit, _ := strconv.ParseFloat(sellOffer["minLimit"].(string), 64)
-						sellMaxLimit, _ := strconv.ParseFloat(sellOffer["maxLimit"].(string), 64)
-
-						if sellMinLimit > float64(user_max_limit) || buyMinLimit > sellMaxLimit || buyMaxLimit < sellMinLimit || sellMaxLimit < float64(user_min_limit) {
-							continue
-						}
-
-						if buyMaxLimit == sellMinLimit && (sellMinLimit > float64(user_min_limit) || sellMinLimit < float64(user_max_limit)) {
-							canBuy := buyMaxLimit
-							spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
-							if spread > 5 {
-								canBuy = math.Min(canBuy, 90000)
-							}
-							result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
-							if (spread < 5) || (spread > 5 && canBuy <= 90000) {
-								resultOptions = append(resultOptions, result)
-							}
-						} else if buyMinLimit == sellMaxLimit && (sellMaxLimit > float64(user_min_limit) || sellMaxLimit < float64(user_max_limit)) {
-							canBuy := buyMinLimit
-							spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
-							if spread > 5 {
-								canBuy = math.Min(canBuy, 90000)
-							}
-							result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
-							if (spread < 5) || (spread > 5 && canBuy <= 90000) {
-								resultOptions = append(resultOptions, result)
-							}
-						} else {
-							possiblyBuyAmount = append(possiblyBuyAmount, []interface{}{buyMinLimit, 'b'})
-							possiblyBuyAmount = append(possiblyBuyAmount, []interface{}{buyMaxLimit, 'b'})
-							possiblyBuyAmount = append(possiblyBuyAmount, []interface{}{sellMinLimit, 's'})
-							possiblyBuyAmount = append(possiblyBuyAmount, []interface{}{sellMaxLimit, 's'})
-							sort.Slice(possiblyBuyAmount, func(i, j int) bool {
-								return possiblyBuyAmount[i].([]interface{})[0].(float64) < possiblyBuyAmount[j].([]interface{})[0].(float64)
-							})
-							possibly_buy_interval := []float64{possiblyBuyAmount[1].([]interface{})[0].(float64), possiblyBuyAmount[2].([]interface{})[0].(float64)}
-							if float64(user_min_limit) <= possibly_buy_interval[0] && possibly_buy_interval[0] <= float64(user_max_limit) {
 								spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
-								canBuy := math.Min(float64(user_max_limit), possibly_buy_interval[1])
+								canBuy := math.Min(float64(user_max_limit), buyMaxLimit)
 								if spread > 5 {
 									canBuy = math.Min(canBuy, 90000)
 								}
