@@ -206,7 +206,7 @@ func GetLocalAddresses() []string {
 			}
 		}
 	}
-	return ipAddresses
+	return ipAddresses[:10]
 }
 func CheckToken() {
 	banks_exists := [3]string{"RosBankNew", "TinkoffNew", "PostBankNew"}
