@@ -13,7 +13,7 @@ func main() {
 	fmt.Println(len(ipAddresses), "Local IPS:", ipAddresses)
 	sleepTime, user_min_money, user_max_money, need_spread := binance.GetInfo()
 	fmt.Println(sleepTime, user_min_money, user_max_money, need_spread)
-	go binance.CheckSell("USDT", []string{"RosBankNew"}, "http://user129953:97w4lt@45.135.248.216:2045")
+	go binance.CheckSell("USDT", []string{"PostBankNew"}, "http://user129953:97w4lt@45.135.248.216:2045")
 	assets := []string{"USDT"}
 	current_ip_num := 0
 	for {
@@ -23,7 +23,7 @@ func main() {
 			} else {
 				current_ip_num = 0
 			}
-			go binance.CheckAsset(user_min_money, user_max_money, need_spread, asset, []string{"RosBankNew"}, ipAddresses[current_ip_num])
+			go binance.CheckAsset(user_min_money, user_max_money, need_spread, asset, []string{"PostBankNew"}, ipAddresses[current_ip_num])
 		}
 		duration := time.Duration(sleepTime) * time.Millisecond
 		time.Sleep(duration)
