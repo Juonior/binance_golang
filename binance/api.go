@@ -365,6 +365,13 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 func BuyInfo(localIP string, asset string, transAmount string, payTypes []string) []map[string]interface{} {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 
+	settings := make(map[string]interface{})
+	file, err := ioutil.ReadFile("settings.json")
+	if err != nil {
+		return nil
+	} else {
+		_ = json.Unmarshal(file, &settings)
+	}
 	payload := map[string]interface{}{
 		"asset":         asset,
 		"transAmount":   transAmount,
@@ -389,21 +396,30 @@ func BuyInfo(localIP string, asset string, transAmount string, payTypes []string
 		},
 		Timeout: time.Second * 1,
 	}
-	httpClient := &http.Client{
+	client := &http.Client{
 		Transport: &http.Transport{
 			Dial: dialer.Dial,
 		},
 		Timeout: time.Second * 1,
 	}
 
-	response, err := httpClient.Post(priceInfoURL, "application/json", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", priceInfoURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil
 	}
-	defer response.Body.Close()
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 YaBrowser/23.5.2.625 Yowser/2.5 Safari/537.36")
+	req.Header.Set("clienttype", "web")
+	req.Header.Set("csrftoken", settings["csrftoken"].(string))
+	req.Header.Set("Cookie", settings["cookie"].(string))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
 
 	var data map[string]interface{}
-	err = json.NewDecoder(response.Body).Decode(&data)
+	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return nil
 	}
@@ -444,6 +460,13 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 		"tradeType":     "SELL",
 		"merchantCheck": false,
 	}
+	settings := make(map[string]interface{})
+	file, err := ioutil.ReadFile("settings.json")
+	if err != nil {
+		return nil, err
+	} else {
+		_ = json.Unmarshal(file, &settings)
+	}
 
 	requestBody, err := json.Marshal(payload)
 	if err != nil {
@@ -476,14 +499,23 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 	// 	Timeout: time.Second * 1,
 	// }
 
-	response, err := client.Post(priceInfoURL, "application/json", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", priceInfoURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 YaBrowser/23.5.2.625 Yowser/2.5 Safari/537.36")
+	req.Header.Set("clienttype", "web")
+	req.Header.Set("csrftoken", settings["csrftoken"].(string))
+	req.Header.Set("Cookie", settings["cookie"].(string))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
 	var data map[string]interface{}
-	err = json.NewDecoder(response.Body).Decode(&data)
+	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return nil, err
 	}
