@@ -109,7 +109,7 @@ func SendWebhook(status string, amount string, profit float64, spread float64, p
 	fmt.Println("Webhook sent successfully.")
 }
 
-func SendWebhookMonitor(amount float64, spread float64, price string, fiat string, minlim float64, maxlim float64, trader string, color string) {
+func SendWebhookMonitor(amount float64, spread float64, price string, fiat string, minlim float64, maxlim float64, trader string, banks string, color string) {
 	embed := Embed{
 		Title: "Binance Order",
 		Color: parseColor(color),
@@ -138,6 +138,10 @@ func SendWebhookMonitor(amount float64, spread float64, price string, fiat strin
 				Name:  "Crypto-Fiat",
 				Value: fmt.Sprintf("%v-RUB", fiat),
 			},
+			{
+				Name:  "Banks",
+				Value: fmt.Sprintf("%v", banks),
+			},
 		},
 		Thumbnail: &Thumbnail{
 			URL: "https://cdn-icons-png.flaticon.com/512/6163/6163319.png",
@@ -161,6 +165,35 @@ func SendWebhookMonitor(amount float64, spread float64, price string, fiat strin
 	defer resp.Body.Close()
 
 	fmt.Println("Webhook sent successfully.")
+}
+func findIntersections(list1 []string, list2 []string, list3 []string) []string {
+	intersections := []string{}
+	visited := make(map[string]bool)
+
+	for _, item := range list1 {
+		visited[item] = true
+	}
+
+	for _, item := range list2 {
+		if visited[item] {
+			intersections = append(intersections, item)
+		}
+	}
+
+	intersection2 := []string{}
+	visited2 := make(map[string]bool)
+
+	for _, item := range intersections {
+		visited2[item] = true
+	}
+
+	for _, item := range list3 {
+		if visited2[item] {
+			intersection2 = append(intersection2, item)
+		}
+	}
+
+	return intersection2
 }
 func parseColor(color string) int {
 	color = strings.TrimPrefix(color, "#")
@@ -555,15 +588,20 @@ func CheckSell(asset string, bank interface{}, currentSellIp string) {
 func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, asset string, bank interface{}, currentBuyProxy string) {
 	buyData := BuyInfo(currentBuyProxy, asset, "0", bank.([]string))
 	// buyData = buyData[:1]
+
+	// fmt.Println(buyData)
 	if len(buyData) > 0 {
 		if len(sellData) > 0 {
 			if asset == "USDT" {
 				now := time.Now().Format("15:04:05.000000")
 				fmt.Println(now, "|", asset, "| BUY:", buyData[0]["price"], "| SELL:", sellData[0]["price"], "| SELL UPDATE:", sellUpdate)
 			}
-			// fmt.Println(sellData)
 			resultOptions := []interface{}{}
 			for _, buyOffer := range buyData {
+				banks_buy := []string{}
+				for _, bank_b := range buyOffer["tradeMethods"].([]interface{}) {
+					banks_buy = append(banks_buy, bank_b.(map[string]interface{})["identifier"].(string))
+				}
 				buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
 				// buyPrice := 80.00
 				buyMinLimit, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
@@ -573,7 +611,11 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 				}
 				for _, sellOffer := range sellData {
 					sellPrice, _ := strconv.ParseFloat(sellOffer["price"].(string), 64)
-					if sellPrice > buyPrice {
+					banks_sell := []string{}
+					for _, bank_s := range sellOffer["tradeMethods"].([]interface{}) {
+						banks_sell = append(banks_sell, bank_s.(map[string]interface{})["identifier"].(string))
+					}
+					if sellPrice > buyPrice && len(findIntersections(banks_buy, banks_sell, bank.([]string))) > 0 {
 						if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
 							continue
 						}
@@ -601,7 +643,7 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 					if spread >= float64(need_spread) {
 						canBuy := resultOptions[0].([]interface{})[1].(float64)
 						canBuyStr := strconv.FormatFloat(canBuy, 'f', -1, 64)
-						fmt.Println(order_info)
+						// fmt.Println(order_info)
 						last_order_id = order_info["id"].(string)
 						for i := 0; i < 3; i++ {
 							go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit, ipAddresses_api[i])
@@ -612,7 +654,11 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 						maxlim, _ := strconv.ParseFloat(order_info["maxLimit"].(string), 64)
 						amount_in_rub := math.Round(amount) * math.Round(price)
 						merchant_name := order_info["name"].(string)
-						SendWebhookMonitor(math.Round(amount_in_rub), spread, order_info["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, "67008c")
+						banks_buy := []string{}
+						for _, bank_b := range order_info["tradeMethods"].([]interface{}) {
+							banks_buy = append(banks_buy, bank_b.(map[string]interface{})["identifier"].(string))
+						}
+						SendWebhookMonitor(math.Round(amount_in_rub), spread, order_info["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, fmt.Sprintf("%v", banks_buy), "67008c")
 					}
 				}
 			}
