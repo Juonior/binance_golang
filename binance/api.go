@@ -518,8 +518,11 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 						maxlim, _ := strconv.ParseFloat(order_info["maxLimit"].(string), 64)
 						amount_in_rub := math.Round(amount) * math.Round(price)
 						merchant_name := order_info["name"].(string)
-						SendWebhookMonitor(math.Round(amount_in_rub), spread, order_info["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, "67008c")
-
+						banks_buy := []string{}
+						for _, bank_b := range order_info["tradeMethods"].([]interface{}) {
+							banks_buy = append(banks_buy, bank_b.(map[string]interface{})["identifier"].(string))
+						}
+						SendWebhookMonitor(math.Round(amount_in_rub), spread, order_info["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, fmt.Sprintf("%v", banks_buy), "67008c")
 					}
 				}
 			}
