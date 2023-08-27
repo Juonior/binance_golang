@@ -473,6 +473,14 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 				for _, sellOffer := range sellData {
 					sellPrice, _ := strconv.ParseFloat(sellOffer["price"].(string), 64)
 					if sellPrice > buyPrice {
+						banks_buy := []string{}
+						banks_sell := []string{}
+						for _, bank_b := range buyOffer["tradeMethods"].([]interface{}) {
+							banks_buy = append(banks_buy, bank_b.(map[string]interface{})["identifier"].(string))
+						}
+						for _, bank_s := range sellOffer["tradeMethods"].([]interface{}) {
+							banks_sell = append(banks_sell, bank_s.(map[string]interface{})["identifier"].(string))
+						}
 						if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
 							continue
 						}
