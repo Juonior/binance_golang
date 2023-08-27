@@ -598,10 +598,6 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 			}
 			resultOptions := []interface{}{}
 			for _, buyOffer := range buyData {
-				banks_buy := []string{}
-				for _, bank_b := range buyOffer["tradeMethods"].([]interface{}) {
-					banks_buy = append(banks_buy, bank_b.(map[string]interface{})["identifier"].(string))
-				}
 				buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
 				// buyPrice := 80.00
 				buyMinLimit, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
@@ -611,24 +607,29 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 				}
 				for _, sellOffer := range sellData {
 					sellPrice, _ := strconv.ParseFloat(sellOffer["price"].(string), 64)
-					banks_sell := []string{}
-					for _, bank_s := range sellOffer["tradeMethods"].([]interface{}) {
-						banks_sell = append(banks_sell, bank_s.(map[string]interface{})["identifier"].(string))
-					}
-					if sellPrice > buyPrice && len(findIntersections(banks_buy, banks_sell, bank.([]string))) > 0 {
-						if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
-							continue
+					if sellPrice > buyPrice {
+						banks_buy := []string{}
+						banks_sell := []string{}
+						for _, bank_b := range buyOffer["tradeMethods"].([]interface{}) {
+							banks_buy = append(banks_buy, bank_b.(map[string]interface{})["identifier"].(string))
 						}
-						spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
-						canBuy := math.Min(float64(user_max_limit), buyMaxLimit)
-						if spread > 5 {
-							canBuy = math.Min(canBuy, 90000)
+						for _, bank_s := range sellOffer["tradeMethods"].([]interface{}) {
+							banks_sell = append(banks_sell, bank_s.(map[string]interface{})["identifier"].(string))
 						}
-						result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
-						if (spread < 5) || (spread > 5 && canBuy <= 90000) {
-							resultOptions = append(resultOptions, result)
+						if len(findIntersections(banks_buy, banks_sell, bank.([]string))) > 0 {
+							if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
+								continue
+							}
+							spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
+							canBuy := math.Min(float64(user_max_limit), buyMaxLimit)
+							if spread > 5 {
+								canBuy = math.Min(canBuy, 90000)
+							}
+							result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
+							if (spread < 5) || (spread > 5 && canBuy <= 90000) {
+								resultOptions = append(resultOptions, result)
+							}
 						}
-
 					}
 				}
 			}
