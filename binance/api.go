@@ -107,7 +107,7 @@ func SendWebhook(status string, amount string, profit float64, spread float64, p
 
 	fmt.Println("Webhook sent successfully.")
 }
-func SendWebhookMonitor(amount float64, spread float64, price string, fiat string, minlim float64, maxlim float64, trader string, color string) {
+func SendWebhookMonitor(amount float64, spread float64, price string, fiat string, minlim float64, maxlim float64, trader string, banks string, color string) {
 	embed := Embed{
 		Title: "Binance Order",
 		Color: parseColor(color),
@@ -135,6 +135,10 @@ func SendWebhookMonitor(amount float64, spread float64, price string, fiat strin
 			{
 				Name:  "Crypto-Fiat",
 				Value: fmt.Sprintf("%v-RUB", fiat),
+			},
+			{
+				Name:  "Banks",
+				Value: fmt.Sprintf("%v", banks),
 			},
 		},
 		Thumbnail: &Thumbnail{
