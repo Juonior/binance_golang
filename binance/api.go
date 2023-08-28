@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const discordWebhookURL = "https://discord.com/api/webhooks/1131334900272857089/DzxJQ8wD-EMcnl65Ev4ww5I6aVcYxSw25LCihHIloRwU-1anlLKpEzV_1b6w0mMBXY1l"
+const discordSuccessURL = "https://discord.com/api/webhooks/1131334900272857089/DzxJQ8wD-EMcnl65Ev4ww5I6aVcYxSw25LCihHIloRwU-1anlLKpEzV_1b6w0mMBXY1l"
 const discordMonitorURL = "https://discord.com/api/webhooks/1142911381134393447/Z-YLp-wI-ObOWmYsEMzPapl7IA-M6kM-Rl4dRIExxYj1PZRpWnGcroK54u8PjP0C4MOG"
 
 var sellData []map[string]interface{}
@@ -59,7 +59,7 @@ func formatNum(numFloat float64) string {
 	}
 	return formattedStr
 }
-func SendWebhook(status string, amount string, profit float64, spread float64, price string, orderTime, requestTime, color string) {
+func SendWebhook(status string, amount string, profit float64, spread float64, price string, orderTime, requestTime, ip string, color string) {
 	embed := Embed{
 		Title: fmt.Sprintf("[JP] %v", status),
 		Color: parseColor(color),
@@ -85,7 +85,7 @@ func SendWebhook(status string, amount string, profit float64, spread float64, p
 			URL: "https://cdn-icons-png.flaticon.com/512/6163/6163319.png",
 		},
 		Footer: &Footer{
-			Text: fmt.Sprintf("%v  | %v", orderTime, requestTime),
+			Text: fmt.Sprintf("%v  | %v | %v", orderTime, requestTime, ip),
 		},
 	}
 	message := Message{
@@ -98,7 +98,7 @@ func SendWebhook(status string, amount string, profit float64, spread float64, p
 		return
 	}
 
-	resp, err := http.Post(discordWebhookURL, "application/json", strings.NewReader(string(body)))
+	resp, err := http.Post(discordSuccessURL, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		fmt.Println("Error sending webhook:", err)
 		return
@@ -107,6 +107,7 @@ func SendWebhook(status string, amount string, profit float64, spread float64, p
 
 	fmt.Println("Webhook sent successfully.")
 }
+
 func SendWebhookMonitor(amount float64, spread float64, price string, fiat string, minlim float64, maxlim float64, trader string, banks string, color string) {
 	embed := Embed{
 		Title: "Binance Order",
@@ -164,6 +165,35 @@ func SendWebhookMonitor(amount float64, spread float64, price string, fiat strin
 
 	fmt.Println("Webhook sent successfully.")
 }
+func findIntersections(list1 []string, list2 []string, list3 []string) []string {
+	intersections := []string{}
+	visited := make(map[string]bool)
+
+	for _, item := range list1 {
+		visited[item] = true
+	}
+
+	for _, item := range list2 {
+		if visited[item] {
+			intersections = append(intersections, item)
+		}
+	}
+
+	intersection2 := []string{}
+	visited2 := make(map[string]bool)
+
+	for _, item := range intersections {
+		visited2[item] = true
+	}
+
+	for _, item := range list3 {
+		if visited2[item] {
+			intersection2 = append(intersection2, item)
+		}
+	}
+
+	return intersection2
+}
 func parseColor(color string) int {
 	color = strings.TrimPrefix(color, "#")
 	var value int
@@ -175,6 +205,41 @@ func parseColor(color string) int {
 	return value
 }
 
+func GetLocalAddresses() []string {
+	var ipAddresses []string
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		fmt.Println("Failed to get network interfaces:", err)
+		return nil
+	}
+
+	// Перебираем каждый сетевой интерфейс
+	for _, i := range interfaces {
+		// Получаем адреса для текущего интерфейса
+		addrs, err := i.Addrs()
+		if err != nil {
+			fmt.Println("Failed to get addresses for interface", i.Name, ":", err)
+			continue
+		}
+
+		// Перебираем каждый адрес для текущего интерфейса
+		for _, addr := range addrs {
+			// Проверяем, является ли адрес IP-адресом
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+
+			// Проверяем, является ли адрес локальным
+			if !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+				// Добавляем IP-адрес в массив
+				ipAddresses = append(ipAddresses, ipNet.IP.String())
+				ipAddresses_api = append(ipAddresses, ipNet.IP.String())
+			}
+		}
+	}
+	return ipAddresses
+}
 func CheckToken() {
 	banks_exists := [3]string{"RosBankNew", "TinkoffNew", "PostBankNew"}
 	cookie := ""
@@ -252,7 +317,7 @@ func CheckToken() {
 	}
 }
 
-func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset string, spread float64, profit float64) {
+func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset string, spread float64, profit float64, proxy string) {
 	start := time.Now()
 	settings := make(map[string]interface{})
 	file, err := ioutil.ReadFile("settings.json")
@@ -288,7 +353,16 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 	req.Header.Set("Cookie", settings["cookie"].(string))
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	proxyURL, err := url.Parse(proxy)
+	if err != nil {
+		return
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		},
+	}
 
 	// Send the request
 	resp, err := client.Do(req)
@@ -306,19 +380,26 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 
 	// Return the response
 	elapsed := time.Since(start)
-	// fmt.Printf("Execution time: %s", elapsed)
+	fmt.Printf("Execution time: %s", elapsed)
 	// status string, amount string, profit string, spread string, price string, orderTime, requestTime, color string
 	time_after_response := time.Now().Format("15:04:05.000000")
 	if response["success"] == true {
-		go SendWebhook("Successful creation order Binance", totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), "#46b000")
+		go SendWebhook("Successful creation order Binance", totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), proxy, "#46b000")
 	} else {
-		go SendWebhook(fmt.Sprintf("%v", response["message"]), totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), "#510A1F")
+		go SendWebhook(fmt.Sprintf("%v", response["message"]), totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), proxy, "#510A1F")
 		// go SendWebhook(fmt.Sprintf("[JP] [%v%%] %v | Profit: %v руб. | Price: %v RUB | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), matchPrice, totalAmount, response["message"], elapsed), "#510A1F")
 	}
 }
 func BuyInfo(proxy string, asset string, transAmount string, payTypes []string) []map[string]interface{} {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 
+	settings := make(map[string]interface{})
+	file, err := ioutil.ReadFile("settings.json")
+	if err != nil {
+		return nil
+	} else {
+		_ = json.Unmarshal(file, &settings)
+	}
 	payload := map[string]interface{}{
 		"asset":         asset,
 		"transAmount":   transAmount,
@@ -348,14 +429,23 @@ func BuyInfo(proxy string, asset string, transAmount string, payTypes []string) 
 		},
 	}
 
-	response, err := client.Post(priceInfoURL, "application/json", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", priceInfoURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil
 	}
-	defer response.Body.Close()
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 YaBrowser/23.5.2.625 Yowser/2.5 Safari/537.36")
+	req.Header.Set("clienttype", "web")
+	req.Header.Set("csrftoken", settings["csrftoken"].(string))
+	req.Header.Set("Cookie", settings["cookie"].(string))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
 
 	var data map[string]interface{}
-	err = json.NewDecoder(response.Body).Decode(&data)
+	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return nil
 	}
@@ -396,6 +486,13 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 		"tradeType":     "SELL",
 		"merchantCheck": false,
 	}
+	settings := make(map[string]interface{})
+	file, err := ioutil.ReadFile("settings.json")
+	if err != nil {
+		return nil, err
+	} else {
+		_ = json.Unmarshal(file, &settings)
+	}
 
 	requestBody, err := json.Marshal(payload)
 	if err != nil {
@@ -412,15 +509,23 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 			Proxy: http.ProxyURL(proxyURL),
 		},
 	}
-
-	response, err := client.Post(priceInfoURL, "application/json", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", priceInfoURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 YaBrowser/23.5.2.625 Yowser/2.5 Safari/537.36")
+	req.Header.Set("clienttype", "web")
+	req.Header.Set("csrftoken", settings["csrftoken"].(string))
+	req.Header.Set("Cookie", settings["cookie"].(string))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
 	var data map[string]interface{}
-	err = json.NewDecoder(response.Body).Decode(&data)
+	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return nil, err
 	}
@@ -447,9 +552,9 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 	return binanceSellInfo, nil
 }
 
-func CheckSell(asset string, bank interface{}, currentSellIp string) {
+func CheckSell(asset string, bank interface{}, currentSellProxy string) {
 	for {
-		sellData, _ = SellInfo(currentSellIp, asset, "0", bank.([]string))
+		sellData, _ = SellInfo(currentSellProxy, asset, "0", bank.([]string))
 		if len(sellData) > 0 {
 			sellData = sellData[2:]
 		}
@@ -459,13 +564,12 @@ func CheckSell(asset string, bank interface{}, currentSellIp string) {
 }
 func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, asset string, bank interface{}, currentBuyProxy string) {
 	buyData := BuyInfo(currentBuyProxy, asset, "0", bank.([]string))
-	// buyData = buyData[:1]
 	if len(buyData) > 0 {
 		if len(sellData) > 0 {
-			now := time.Now().Format("15:04:05.000000")
-			fmt.Println(now, "|", asset, "| BUY:", buyData[0]["price"], "| SELL:", sellData[0]["price"], "| SELL UPDATE:", sellUpdate)
-			// fmt.Println(sellData)
-			resultOptions := []interface{}{}
+			if asset == "USDT" {
+				now := time.Now().Format("15:04:05.000000")
+				fmt.Println(now, "|", asset, "| BUY:", buyData[0]["price"], "| SELL:", sellData[0]["price"], "| SELL UPDATE:", sellUpdate)
+			}
 			for _, buyOffer := range buyData {
 				buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
 				// buyPrice := 80.00
@@ -485,48 +589,35 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 						for _, bank_s := range sellOffer["tradeMethods"].([]interface{}) {
 							banks_sell = append(banks_sell, bank_s.(map[string]interface{})["identifier"].(string))
 						}
-						if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
-							continue
+						if len(findIntersections(banks_buy, banks_sell, bank.([]string))) > 0 {
+							if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
+								continue
+							}
+							spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
+							canBuy := math.Min(float64(user_max_limit), buyMaxLimit)
+							if spread > 5 {
+								canBuy = math.Min(canBuy, 90000)
+							}
+							if (spread < 5) || (spread > 5 && canBuy <= 90000) {
+								profit := ((canBuy / buyPrice) * sellPrice) - canBuy
+								if last_order_id != buyOffer["id"].(string) {
+									if spread >= float64(need_spread) {
+										last_order_id = buyOffer["id"].(string)
+										for i := 0; i < 3; i++ {
+											go MakeOrder(buyOffer["id"].(string), buyOffer["price"].(string), strconv.FormatFloat(canBuy, 'f', -1, 64), asset, spread, profit, ipAddresses_api[i])
+										}
+										amount, _ := strconv.ParseFloat(buyOffer["amount"].(string), 64)
+										price, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
+										minlim, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
+										maxlim, _ := strconv.ParseFloat(buyOffer["maxLimit"].(string), 64)
+										amount_in_rub := math.Round(amount) * math.Round(price)
+										merchant_name := buyOffer["name"].(string)
+										SendWebhookMonitor(math.Round(amount_in_rub), spread, buyOffer["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, fmt.Sprintf("%v", banks_buy), "67008c")
+										return
+									}
+								}
+							}
 						}
-						spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
-						canBuy := math.Min(float64(user_max_limit), buyMaxLimit)
-						if spread > 5 {
-							canBuy = math.Min(canBuy, 90000)
-						}
-						result := []interface{}{((canBuy / buyPrice) * sellPrice) - canBuy, canBuy, buyOffer, sellOffer, spread}
-						if (spread < 5) || (spread > 5 && canBuy <= 90000) {
-							resultOptions = append(resultOptions, result)
-						}
-
-					}
-				}
-			}
-			sort.Slice(resultOptions, func(i, j int) bool {
-				return resultOptions[i].([]interface{})[4].(float64) > resultOptions[j].([]interface{})[4].(float64)
-			})
-			if len(resultOptions) > 0 {
-				profit := resultOptions[0].([]interface{})[0].(float64)
-				spread := resultOptions[0].([]interface{})[4].(float64)
-				order_info := resultOptions[0].([]interface{})[2].(map[string]interface{})
-				if last_order_id != order_info["id"].(string) {
-					if spread >= float64(need_spread) {
-						canBuy := resultOptions[0].([]interface{})[1].(float64)
-						canBuyStr := strconv.FormatFloat(canBuy, 'f', -1, 64)
-						last_order_id = order_info["id"].(string)
-						for i := 0; i < 3; i++ {
-							go MakeOrder(order_info["id"].(string), order_info["price"].(string), canBuyStr, asset, spread, profit)
-						}
-						amount, _ := strconv.ParseFloat(order_info["amount"].(string), 64)
-						price, _ := strconv.ParseFloat(order_info["price"].(string), 64)
-						minlim, _ := strconv.ParseFloat(order_info["minLimit"].(string), 64)
-						maxlim, _ := strconv.ParseFloat(order_info["maxLimit"].(string), 64)
-						amount_in_rub := math.Round(amount) * math.Round(price)
-						merchant_name := order_info["name"].(string)
-						banks_buy := []string{}
-						for _, bank_b := range order_info["tradeMethods"].([]interface{}) {
-							banks_buy = append(banks_buy, bank_b.(map[string]interface{})["identifier"].(string))
-						}
-						SendWebhookMonitor(math.Round(amount_in_rub), spread, order_info["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, fmt.Sprintf("%v", banks_buy), "67008c")
 					}
 				}
 			}
