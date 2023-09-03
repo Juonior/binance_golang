@@ -389,10 +389,11 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 	time_after_response := time.Now().Format("15:04:05.000000")
 	if response["success"] == true {
 		go SendWebhook("Successful creation order Binance", totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), localIP, "#46b000")
-	} else {
-		go SendWebhook(fmt.Sprintf("%v", response["message"]), totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), localIP, "#510A1F")
-		// go SendWebhook(fmt.Sprintf("[JP] [%v%%] %v | Profit: %v руб. | Price: %v RUB | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), matchPrice, totalAmount, response["message"], elapsed), "#510A1F")
 	}
+	// else {
+	// 	go SendWebhook(fmt.Sprintf("%v", response["message"]), totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), localIP, "#510A1F")
+	// 	// go SendWebhook(fmt.Sprintf("[JP] [%v%%] %v | Profit: %v руб. | Price: %v RUB | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), matchPrice, totalAmount, response["message"], elapsed), "#510A1F")
+	// }
 }
 func BuyInfo(localIP string, asset string, transAmount string, payTypes []string) []map[string]interface{} {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
@@ -585,6 +586,7 @@ func CheckSell(asset string, bank interface{}, currentSellIp string) {
 	}
 }
 func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, asset string, bank interface{}, currentBuyIp string) {
+	start := time.Now()
 	buyData := BuyInfo(currentBuyIp, asset, "0", bank.([]string))
 	if len(buyData) > 0 {
 		if len(sellData) > 0 {
@@ -625,7 +627,9 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 								if last_order_id != buyOffer["id"].(string) {
 									if spread >= float64(need_spread) {
 										last_order_id = buyOffer["id"].(string)
-										for i := 0; i < 3; i++ {
+										elapsed := time.Since(start)
+										fmt.Printf("Execution time: %s", elapsed)
+										for i := 0; i < len(ipAddresses_api); i++ {
 											go MakeOrder(buyOffer["id"].(string), buyOffer["price"].(string), strconv.FormatFloat(canBuy, 'f', -1, 64), asset, spread, profit, ipAddresses_api[i])
 										}
 										amount, _ := strconv.ParseFloat(buyOffer["amount"].(string), 64)
