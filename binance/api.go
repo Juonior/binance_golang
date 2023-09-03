@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -317,7 +318,8 @@ func CheckToken() {
 	}
 }
 
-func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset string, spread float64, profit float64, localIP string) {
+func MakeOrder(wg *sync.WaitGroup, OrderNumber string, matchPrice string, totalAmount string, asset string, spread float64, profit float64, localIP string, order_responses *[]map[string]interface{}) {
+	defer wg.Done()
 	start := time.Now()
 	settings := make(map[string]interface{})
 	file, err := ioutil.ReadFile("settings.json")
@@ -384,16 +386,36 @@ func MakeOrder(OrderNumber string, matchPrice string, totalAmount string, asset 
 
 	// Return the response
 	elapsed := time.Since(start)
-	fmt.Printf("Execution time: %s", elapsed)
-	// status string, amount string, profit string, spread string, price string, orderTime, requestTime, color string
 	time_after_response := time.Now().Format("15:04:05.000000")
 	if response["success"] == true {
-		go SendWebhook("Successful creation order Binance", totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), localIP, "#46b000")
+		successfulCreation := map[string]interface{}{
+			"message":     "Successful creation order Binance",
+			"success":     true,
+			"totalAmount": totalAmount,
+			"profit":      math.Round(profit),
+			"spread":      spread,
+			"matchPrice":  matchPrice,
+			"time":        time_after_response,
+			"elapsed":     fmt.Sprintf("%v", elapsed),
+			"localIP":     localIP,
+			"color":       "#46b000",
+		}
+		*order_responses = append(*order_responses, successfulCreation)
+	} else {
+		successfulCreation := map[string]interface{}{
+			"message":     fmt.Sprintf("%v", response["message"]),
+			"success":     false,
+			"totalAmount": totalAmount,
+			"profit":      math.Round(profit),
+			"spread":      spread,
+			"matchPrice":  matchPrice,
+			"time":        time_after_response,
+			"elapsed":     fmt.Sprintf("%v", elapsed),
+			"localIP":     localIP,
+			"color":       "#510A1F",
+		}
+		*order_responses = append(*order_responses, successfulCreation)
 	}
-	// else {
-	// 	go SendWebhook(fmt.Sprintf("%v", response["message"]), totalAmount, math.Round(profit), spread, matchPrice, time_after_response, fmt.Sprintf("%v", elapsed), localIP, "#510A1F")
-	// 	// go SendWebhook(fmt.Sprintf("[JP] [%v%%] %v | Profit: %v руб. | Price: %v RUB | Amount: %v RUB | Message: %v | Request time: %v", spread, time_after_response, math.Round(profit), matchPrice, totalAmount, response["message"], elapsed), "#510A1F")
-	// }
 }
 func BuyInfo(localIP string, asset string, transAmount string, payTypes []string) []map[string]interface{} {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
@@ -586,7 +608,6 @@ func CheckSell(asset string, bank interface{}, currentSellIp string) {
 	}
 }
 func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, asset string, bank interface{}, currentBuyIp string) {
-	start := time.Now()
 	buyData := BuyInfo(currentBuyIp, asset, "0", bank.([]string))
 	if len(buyData) > 0 {
 		if len(sellData) > 0 {
@@ -627,10 +648,11 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 								if last_order_id != buyOffer["id"].(string) {
 									if spread >= float64(need_spread) {
 										last_order_id = buyOffer["id"].(string)
-										elapsed := time.Since(start)
-										fmt.Printf("Execution time: %s", elapsed)
+										var wg sync.WaitGroup
+										wg.Add(len(ipAddresses_api))
+										order_responses := make([]map[string]interface{}, 0)
 										for i := 0; i < len(ipAddresses_api); i++ {
-											go MakeOrder(buyOffer["id"].(string), buyOffer["price"].(string), strconv.FormatFloat(canBuy, 'f', -1, 64), asset, spread, profit, ipAddresses_api[i])
+											go MakeOrder(&wg, buyOffer["id"].(string), buyOffer["price"].(string), strconv.FormatFloat(canBuy, 'f', -1, 64), asset, spread, profit, ipAddresses_api[i], &order_responses)
 										}
 										amount, _ := strconv.ParseFloat(buyOffer["amount"].(string), 64)
 										price, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
@@ -639,6 +661,21 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 										amount_in_rub := math.Round(amount) * math.Round(price)
 										merchant_name := buyOffer["name"].(string)
 										SendWebhookMonitor(math.Round(amount_in_rub), spread, buyOffer["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, fmt.Sprintf("%v", banks_buy), "67008c")
+										wg.Wait()
+
+										orderInfo := make(map[string]interface{})
+										for _, order := range order_responses {
+											if order["success"].(bool) {
+												orderInfo = order
+												break
+											}
+										}
+
+										if len(orderInfo) > 0 {
+											go SendWebhook(orderInfo["message"].(string), orderInfo["totalAmount"].(string), orderInfo["profit"].(float64), orderInfo["spread"].(float64), orderInfo["matchPrice"].(string), orderInfo["time"].(string), orderInfo["elapsed"].(string), orderInfo["localIP"].(string), orderInfo["color"].(string))
+										} else {
+											go SendWebhook(order_responses[0]["message"].(string), order_responses[0]["totalAmount"].(string), order_responses[0]["profit"].(float64), order_responses[0]["spread"].(float64), order_responses[0]["matchPrice"].(string), order_responses[0]["time"].(string), order_responses[0]["elapsed"].(string), order_responses[0]["localIP"].(string), order_responses[0]["color"].(string))
+										}
 										return
 									}
 								}
