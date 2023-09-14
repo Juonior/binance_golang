@@ -376,7 +376,7 @@ func MakeOrder(wg *sync.WaitGroup, OrderNumber string, matchPrice string, totalA
 		return
 	}
 	defer resp.Body.Close()
-
+	client.Transport.(*http.Transport).CloseIdleConnections()
 	// Process the response
 	var response map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&response)
@@ -417,13 +417,13 @@ func MakeOrder(wg *sync.WaitGroup, OrderNumber string, matchPrice string, totalA
 		*order_responses = append(*order_responses, successfulCreation)
 	}
 }
-func BuyInfo(localIP string, asset string, transAmount string, payTypes []string) []map[string]interface{} {
+func BuyInfo(localIP string, asset string, transAmount string, payTypes []string) ([]map[string]interface{}, error) {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 
 	settings := make(map[string]interface{})
 	file, err := ioutil.ReadFile("settings.json")
 	if err != nil {
-		return nil
+		return nil, err
 	} else {
 		_ = json.Unmarshal(file, &settings)
 	}
@@ -442,25 +442,26 @@ func BuyInfo(localIP string, asset string, transAmount string, payTypes []string
 
 	requestBody, err := json.Marshal(payload)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	dialer := &net.Dialer{
 		LocalAddr: &net.TCPAddr{
-			IP: net.ParseIP(localIP),
+			IP:   net.ParseIP(localIP),
+			Port: 0,
 		},
-		Timeout: time.Second * 1,
+		Timeout: time.Millisecond * 300,
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
 			Dial: dialer.Dial,
 		},
-		Timeout: time.Second * 1,
+		Timeout: time.Millisecond * 300,
 	}
 
 	req, err := http.NewRequest("POST", priceInfoURL, bytes.NewBuffer(requestBody))
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 YaBrowser/23.5.2.625 Yowser/2.5 Safari/537.36")
 	req.Header.Set("clienttype", "web")
@@ -469,14 +470,14 @@ func BuyInfo(localIP string, asset string, transAmount string, payTypes []string
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer resp.Body.Close()
-
+	client.Transport.(*http.Transport).CloseIdleConnections()
 	var data map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	var binanceSellInfo []map[string]interface{}
@@ -497,8 +498,7 @@ func BuyInfo(localIP string, asset string, transAmount string, payTypes []string
 
 		binanceSellInfo = append(binanceSellInfo, orderInfo)
 	}
-
-	return binanceSellInfo
+	return binanceSellInfo, err
 }
 
 func SellInfo(proxy string, asset string, transAmount string, payTypes []string) ([]map[string]interface{}, error) {
@@ -563,11 +563,13 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 	req.Header.Set("csrftoken", settings["csrftoken"].(string))
 	req.Header.Set("Cookie", settings["cookie"].(string))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	client.Transport.(*http.Transport).CloseIdleConnections()
 
 	var data map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&data)
@@ -607,8 +609,9 @@ func CheckSell(asset string, bank interface{}, currentSellIp string) {
 		time.Sleep(5 * time.Second)
 	}
 }
+
 func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, asset string, bank interface{}, currentBuyIp string) {
-	buyData := BuyInfo(currentBuyIp, asset, "0", bank.([]string))
+	buyData, BuyError := BuyInfo(currentBuyIp, asset, "0", bank.([]string))
 	if len(buyData) > 0 {
 		if len(sellData) > 0 {
 			if asset == "USDT" {
@@ -649,9 +652,9 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 									if spread >= float64(need_spread) {
 										last_order_id = buyOffer["id"].(string)
 										var wg sync.WaitGroup
-										wg.Add(len(ipAddresses_api))
+										wg.Add(6)
 										order_responses := make([]map[string]interface{}, 0)
-										for i := 0; i < len(ipAddresses_api); i++ {
+										for i := 0; i < 6; i++ {
 											go MakeOrder(&wg, buyOffer["id"].(string), buyOffer["price"].(string), strconv.FormatFloat(canBuy, 'f', -1, 64), asset, spread, profit, ipAddresses_api[i], &order_responses)
 										}
 										amount, _ := strconv.ParseFloat(buyOffer["amount"].(string), 64)
@@ -686,6 +689,10 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 			}
 		}
 	} else {
-		fmt.Println("BuyData None", currentBuyIp)
+
+		fmt.Println("BuyData None", currentBuyIp, BuyError)
+		fmt.Println(buyData)
 	}
+
+	return
 }
