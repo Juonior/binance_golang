@@ -2,8 +2,8 @@ package binance
 
 import "fmt"
 
-func GetInfo() (int, int, int, float64) {
-	var sleepTime int
+func GetInfo() (float64, int, int, float64) {
+	var sleepTime float64
 	fmt.Print("Enter cooldown requests (In Millisecond): ")
 	fmt.Scan(&sleepTime)
 

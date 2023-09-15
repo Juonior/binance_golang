@@ -16,231 +16,12 @@ import (
 	"time"
 )
 
-const discordSuccessURL = "https://discord.com/api/webhooks/1131334900272857089/DzxJQ8wD-EMcnl65Ev4ww5I6aVcYxSw25LCihHIloRwU-1anlLKpEzV_1b6w0mMBXY1l"
-const discordMonitorURL = "https://discord.com/api/webhooks/1142911381134393447/Z-YLp-wI-ObOWmYsEMzPapl7IA-M6kM-Rl4dRIExxYj1PZRpWnGcroK54u8PjP0C4MOG"
-
 var sellData []map[string]interface{}
 var last_order_id string
 var sellUpdate = time.Now().Format("15:04:05.000000")
 var ipAddresses_api []string
+var foundMatch bool
 
-type Message struct {
-	Content string  `json:"content,omitempty"`
-	Embeds  []Embed `json:"embeds"`
-}
-
-type Embed struct {
-	Title       string     `json:"title,omitempty"`
-	Description string     `json:"description,omitempty"`
-	Fields      []Field    `json:"fields,omitempty"`
-	Color       int        `json:"color,omitempty"`
-	Thumbnail   *Thumbnail `json:"thumbnail,omitempty"`
-	Footer      *Footer    `json:"footer,omitempty"`
-}
-type Thumbnail struct {
-	URL string `json:"url,omitempty"`
-}
-
-type Footer struct {
-	Text string `json:"text,omitempty"`
-}
-type Field struct {
-	Name  string `json:"name,omitempty"`
-	Value string `json:"value,omitempty"`
-}
-
-func formatNum(numFloat float64) string {
-	num := fmt.Sprintf("%v", numFloat)
-	formattedStr := ""
-	for i := 0; i < len(num); i++ {
-		formattedStr += string(num[i])
-		if (len(num)-i-1)%3 == 0 && i != len(num)-1 {
-			formattedStr += " "
-		}
-	}
-	return formattedStr
-}
-func SendWebhook(status string, amount string, profit float64, spread float64, price string, orderTime, requestTime, ip string, color string) {
-	embed := Embed{
-		Title: fmt.Sprintf("[JP] %v", status),
-		Color: parseColor(color),
-		Fields: []Field{
-			{
-				Name:  "Buy Amount",
-				Value: fmt.Sprintf("%v руб.", amount),
-			},
-			{
-				Name:  "Profit",
-				Value: fmt.Sprintf("%v руб.", profit),
-			},
-			{
-				Name:  "Spread",
-				Value: fmt.Sprintf("%v%%", spread),
-			},
-			{
-				Name:  "Price",
-				Value: fmt.Sprintf("%v руб.", price),
-			},
-		},
-		Thumbnail: &Thumbnail{
-			URL: "https://cdn-icons-png.flaticon.com/512/6163/6163319.png",
-		},
-		Footer: &Footer{
-			Text: fmt.Sprintf("%v  | %v | %v", orderTime, requestTime, ip),
-		},
-	}
-	message := Message{
-		Embeds: []Embed{embed},
-	}
-
-	body, err := json.Marshal(message)
-	if err != nil {
-		fmt.Println("Error marshaling JSON:", err)
-		return
-	}
-
-	resp, err := http.Post(discordSuccessURL, "application/json", strings.NewReader(string(body)))
-	if err != nil {
-		fmt.Println("Error sending webhook:", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	fmt.Println("Webhook sent successfully.")
-}
-
-func SendWebhookMonitor(amount float64, spread float64, price string, fiat string, minlim float64, maxlim float64, trader string, banks string, color string) {
-	embed := Embed{
-		Title: "Binance Order",
-		Color: parseColor(color),
-		Fields: []Field{
-			{
-				Name:  "Amount",
-				Value: fmt.Sprintf("%v руб.", formatNum(amount)),
-			},
-			{
-				Name:  "Spread",
-				Value: fmt.Sprintf("%v%%", spread),
-			},
-			{
-				Name:  "Price",
-				Value: fmt.Sprintf("%v руб.", price),
-			},
-			{
-				Name:  "Limits",
-				Value: fmt.Sprintf("%v - %v", formatNum(minlim), formatNum(maxlim)),
-			},
-			{
-				Name:  "Trader",
-				Value: fmt.Sprintf("%v", trader),
-			},
-			{
-				Name:  "Crypto-Fiat",
-				Value: fmt.Sprintf("%v-RUB", fiat),
-			},
-			{
-				Name:  "Banks",
-				Value: fmt.Sprintf("%v", banks),
-			},
-		},
-		Thumbnail: &Thumbnail{
-			URL: "https://cdn-icons-png.flaticon.com/512/6163/6163319.png",
-		},
-	}
-	message := Message{
-		Embeds: []Embed{embed},
-	}
-
-	body, err := json.Marshal(message)
-	if err != nil {
-		fmt.Println("Error marshaling JSON:", err)
-		return
-	}
-
-	resp, err := http.Post(discordMonitorURL, "application/json", strings.NewReader(string(body)))
-	if err != nil {
-		fmt.Println("Error sending webhook:", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	fmt.Println("Webhook sent successfully.")
-}
-func findIntersections(list1 []string, list2 []string, list3 []string) []string {
-	intersections := []string{}
-	visited := make(map[string]bool)
-
-	for _, item := range list1 {
-		visited[item] = true
-	}
-
-	for _, item := range list2 {
-		if visited[item] {
-			intersections = append(intersections, item)
-		}
-	}
-
-	intersection2 := []string{}
-	visited2 := make(map[string]bool)
-
-	for _, item := range intersections {
-		visited2[item] = true
-	}
-
-	for _, item := range list3 {
-		if visited2[item] {
-			intersection2 = append(intersection2, item)
-		}
-	}
-
-	return intersection2
-}
-func parseColor(color string) int {
-	color = strings.TrimPrefix(color, "#")
-	var value int
-	_, err := fmt.Sscanf(color, "%x", &value)
-	if err != nil {
-		fmt.Println("Error parsing color:", err)
-		return 0
-	}
-	return value
-}
-
-func GetLocalAddresses() []string {
-	var ipAddresses []string
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		fmt.Println("Failed to get network interfaces:", err)
-		return nil
-	}
-
-	// Перебираем каждый сетевой интерфейс
-	for _, i := range interfaces {
-		// Получаем адреса для текущего интерфейса
-		addrs, err := i.Addrs()
-		if err != nil {
-			fmt.Println("Failed to get addresses for interface", i.Name, ":", err)
-			continue
-		}
-
-		// Перебираем каждый адрес для текущего интерфейса
-		for _, addr := range addrs {
-			// Проверяем, является ли адрес IP-адресом
-			ipNet, ok := addr.(*net.IPNet)
-			if !ok {
-				continue
-			}
-
-			// Проверяем, является ли адрес локальным
-			if !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
-				// Добавляем IP-адрес в массив
-				ipAddresses = append(ipAddresses, ipNet.IP.String())
-				ipAddresses_api = append(ipAddresses, ipNet.IP.String())
-			}
-		}
-	}
-	return ipAddresses
-}
 func CheckToken() {
 	banks_exists := [3]string{"RosBankNew", "TinkoffNew", "PostBankNew"}
 	cookie := ""
@@ -420,12 +201,9 @@ func MakeOrder(wg *sync.WaitGroup, OrderNumber string, matchPrice string, totalA
 func BuyInfo(localIP string, asset string, transAmount string, payTypes []string) ([]map[string]interface{}, error) {
 	priceInfoURL := "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 
-	settings := make(map[string]interface{})
-	file, err := ioutil.ReadFile("settings.json")
+	settings, err := loadSettings()
 	if err != nil {
 		return nil, err
-	} else {
-		_ = json.Unmarshal(file, &settings)
 	}
 	payload := map[string]interface{}{
 		"asset":         asset,
@@ -445,18 +223,15 @@ func BuyInfo(localIP string, asset string, transAmount string, payTypes []string
 		return nil, err
 	}
 
-	dialer := &net.Dialer{
-		LocalAddr: &net.TCPAddr{
-			IP:   net.ParseIP(localIP),
-			Port: 0,
-		},
-		Timeout: time.Millisecond * 300,
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   time.Millisecond * 300,
+			LocalAddr: &net.TCPAddr{IP: net.ParseIP(localIP), Port: 0},
+		}).DialContext,
 	}
 	client := &http.Client{
-		Transport: &http.Transport{
-			Dial: dialer.Dial,
-		},
-		Timeout: time.Millisecond * 300,
+		Transport: transport,
+		Timeout:   time.Millisecond * 300,
 	}
 
 	req, err := http.NewRequest("POST", priceInfoURL, bytes.NewBuffer(requestBody))
@@ -474,6 +249,7 @@ func BuyInfo(localIP string, asset string, transAmount string, payTypes []string
 	}
 	defer resp.Body.Close()
 	client.Transport.(*http.Transport).CloseIdleConnections()
+
 	var data map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
@@ -538,21 +314,6 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 			Proxy: http.ProxyURL(proxyURL),
 		},
 	}
-
-	// dialer := &net.Dialer{
-	// 	LocalAddr: &net.TCPAddr{
-	// 		IP: net.ParseIP(localIP),
-	// 	},
-	// 	Timeout: time.Second * 1,
-	// }
-
-	// // Create an HTTP client with the custom dialer
-	// httpClient := &http.Client{
-	// 	Transport: &http.Transport{
-	// 		Dial: dialer.Dial,
-	// 	},
-	// 	Timeout: time.Second * 1,
-	// }
 
 	req, err := http.NewRequest("POST", priceInfoURL, bytes.NewBuffer(requestBody))
 	if err != nil {
@@ -637,7 +398,16 @@ func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, ass
 						for _, bank_s := range sellOffer["tradeMethods"].([]interface{}) {
 							banks_sell = append(banks_sell, bank_s.(map[string]interface{})["identifier"].(string))
 						}
-						if len(findIntersections(banks_buy, banks_sell, bank.([]string))) > 0 {
+
+						for _, bank_b := range buyOffer["tradeMethods"].([]interface{}) {
+							identifier := bank_b.(map[string]interface{})["identifier"].(string)
+							if !containsString(banks_sell, identifier) || !containsString(banks_buy, identifier) {
+								foundMatch = false
+								break
+							}
+							foundMatch = true
+						}
+						if foundMatch {
 							if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
 								continue
 							}
