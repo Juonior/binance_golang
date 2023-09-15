@@ -130,7 +130,7 @@ func MakeOrder(wg *sync.WaitGroup, OrderNumber string, matchPrice string, totalA
 		return
 	}
 	// Set necessary headers
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 YaBrowser/23.5.2.625 Yowser/2.5 Safari/537.36")
+	req.Header.Set("User-Agent", "Windows")
 	req.Header.Set("clienttype", "web")
 	req.Header.Set("csrftoken", settings["csrftoken"].(string))
 	req.Header.Set("Cookie", settings["cookie"].(string))
@@ -210,7 +210,7 @@ func BuyInfo(localIP string, asset string, transAmount string, payTypes []string
 		"transAmount":   transAmount,
 		"payTypes":      payTypes,
 		"page":          1,
-		"rows":          3,
+		"rows":          1,
 		"countries":     []interface{}{},
 		"publisherType": nil,
 		"fiat":          "RUB",
@@ -225,20 +225,20 @@ func BuyInfo(localIP string, asset string, transAmount string, payTypes []string
 
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout:   time.Millisecond * 300,
+			Timeout:   time.Millisecond * 5000,
 			LocalAddr: &net.TCPAddr{IP: net.ParseIP(localIP), Port: 0},
 		}).DialContext,
 	}
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   time.Millisecond * 300,
+		Timeout:   time.Millisecond * 5000,
 	}
 
 	req, err := http.NewRequest("POST", priceInfoURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 YaBrowser/23.5.2.625 Yowser/2.5 Safari/537.36")
+	req.Header.Set("User-Agent", "Windows")
 	req.Header.Set("clienttype", "web")
 	req.Header.Set("csrftoken", settings["csrftoken"].(string))
 	req.Header.Set("Cookie", settings["cookie"].(string))

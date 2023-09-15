@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
-	"time"
-
 	"p2p/binance"
+	"time"
 )
 
 func main() {
