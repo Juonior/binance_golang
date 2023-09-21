@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	ipAddresses := binance.GetLocalAddresses()
+	ipAddresses := binance.GetLocalAddresses()[1:]
 	binance.CheckToken()
 	fmt.Println(len(ipAddresses), "Local IPS:", ipAddresses)
 	sleepTime, user_min_money, user_max_money, need_spread := binance.GetInfo()
@@ -22,6 +22,7 @@ func main() {
 			} else {
 				current_ip_num = 0
 			}
+			fmt.Println("Asset", len(ipAddresses))
 			go binance.CheckAsset(user_min_money, user_max_money, need_spread, asset, []string{"PostBankNew", "RussianStandardBank"}, ipAddresses[current_ip_num])
 		}
 		duration := time.Duration(sleepTime) * time.Millisecond
