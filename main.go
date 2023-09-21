@@ -22,7 +22,6 @@ func main() {
 			} else {
 				current_ip_num = 0
 			}
-			fmt.Println("Asset", len(ipAddresses))
 			go binance.CheckAsset(user_min_money, user_max_money, need_spread, asset, []string{"PostBankNew", "RussianStandardBank"}, ipAddresses[current_ip_num])
 		}
 		duration := time.Duration(sleepTime) * time.Millisecond
