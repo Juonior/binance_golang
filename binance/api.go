@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var sellData []map[string]interface{}
+var sellData = make(map[string]interface{})
 var last_order_id string
 var sellUpdate = time.Now().Format("15:04:05.000000")
 var ipAddresses_api []string
@@ -360,13 +360,21 @@ func SellInfo(proxy string, asset string, transAmount string, payTypes []string)
 	return binanceSellInfo, nil
 }
 
-func CheckSell(asset string, bank interface{}, currentSellIp string) {
+func CheckSell(assets []string, bank interface{}, currentSellIp string) {
 	for {
-		sellData, _ = SellInfo(currentSellIp, asset, "0", bank.([]string))
-		if len(sellData) > 0 {
-			sellData = sellData[2:]
+		for _, asset := range assets {
+			// Запрашиваем информацию о продажах для актива
+			data, _ := SellInfo(currentSellIp, asset, "0", bank.([]string))
+
+			if len(data) > 0 {
+				// Захватываем мьютекс для безопасной записи в глобальную переменную
+				sellData[asset] = data[2:] // Сохраняем данные о продажах в карту
+			}
+
+			sellUpdate = time.Now().Format("15:04:05.000000")
+			// Здесь можно выполнить другие действия с данными о продажах (sellData)
+			time.Sleep(300 * time.Millisecond)
 		}
-		sellUpdate = time.Now().Format("15:04:05.000000")
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -374,82 +382,84 @@ func CheckSell(asset string, bank interface{}, currentSellIp string) {
 func CheckAsset(user_min_limit int, user_max_limit int, need_spread float64, asset string, bank interface{}, currentBuyIp string) {
 	buyData, BuyError := BuyInfo(currentBuyIp, asset, "0", bank.([]string))
 	if len(buyData) > 0 {
-		if len(sellData) > 0 {
-			if asset == "USDT" {
+		if len(sellData) > 2 {
+			if len(sellData[asset].([]map[string]interface{})) > 0 {
+				// if asset == "USDT" {
 				now := time.Now().Format("15:04:05.000000")
-				fmt.Println(now, "|", asset, "| BUY:", buyData[0]["price"], "| SELL:", sellData[0]["price"], "| SELL UPDATE:", sellUpdate)
-			}
-			for _, buyOffer := range buyData {
-				buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
-				// buyPrice := 80.00
-				buyMinLimit, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
-				buyMaxLimit, _ := strconv.ParseFloat(buyOffer["maxLimit"].(string), 64)
-				if buyMinLimit > float64(user_max_limit) {
-					continue
-				}
-				for _, sellOffer := range sellData {
-					sellPrice, _ := strconv.ParseFloat(sellOffer["price"].(string), 64)
-					if sellPrice > buyPrice {
-						banks_buy := []string{}
-						banks_sell := []string{}
-						for _, bank_b := range buyOffer["tradeMethods"].([]interface{}) {
-							banks_buy = append(banks_buy, bank_b.(map[string]interface{})["identifier"].(string))
-						}
-						for _, bank_s := range sellOffer["tradeMethods"].([]interface{}) {
-							banks_sell = append(banks_sell, bank_s.(map[string]interface{})["identifier"].(string))
-						}
+				fmt.Println(now, "|", asset, "| BUY:", buyData[0]["price"], "| SELL:", sellData[asset].([]map[string]interface{})[0]["price"], "| SELL UPDATE:", sellUpdate)
+				// }
+				for _, buyOffer := range buyData {
+					buyPrice, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
+					// buyPrice := 80.00
+					buyMinLimit, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
+					buyMaxLimit, _ := strconv.ParseFloat(buyOffer["maxLimit"].(string), 64)
+					if buyMinLimit > float64(user_max_limit) {
+						continue
+					}
+					for _, sellOffer := range sellData[asset].([]map[string]interface{}) {
+						sellPrice, _ := strconv.ParseFloat(sellOffer["price"].(string), 64)
+						if sellPrice > buyPrice {
+							banks_buy := []string{}
+							banks_sell := []string{}
+							for _, bank_b := range buyOffer["tradeMethods"].([]interface{}) {
+								banks_buy = append(banks_buy, bank_b.(map[string]interface{})["identifier"].(string))
+							}
+							for _, bank_s := range sellOffer["tradeMethods"].([]interface{}) {
+								banks_sell = append(banks_sell, bank_s.(map[string]interface{})["identifier"].(string))
+							}
 
-						for _, bank_b := range buyOffer["tradeMethods"].([]interface{}) {
-							identifier := bank_b.(map[string]interface{})["identifier"].(string)
-							if !containsString(banks_sell, identifier) || !containsString(banks_buy, identifier) {
-								foundMatch = false
-								break
+							for _, bank_b := range buyOffer["tradeMethods"].([]interface{}) {
+								identifier := bank_b.(map[string]interface{})["identifier"].(string)
+								if !containsString(banks_sell, identifier) || !containsString(banks_buy, identifier) {
+									foundMatch = false
+									break
+								}
+								foundMatch = true
 							}
-							foundMatch = true
-						}
-						if foundMatch {
-							if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
-								continue
-							}
-							spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
-							canBuy := math.Min(float64(user_max_limit), buyMaxLimit)
-							if spread > 5 {
-								canBuy = math.Min(canBuy, 90000)
-							}
-							if (spread < 5) || (spread > 5 && canBuy <= 90000) {
-								profit := ((canBuy / buyPrice) * sellPrice) - canBuy
-								if last_order_id != buyOffer["id"].(string) {
-									if spread >= float64(need_spread) {
-										last_order_id = buyOffer["id"].(string)
-										var wg sync.WaitGroup
-										wg.Add(6)
-										order_responses := make([]map[string]interface{}, 0)
-										for i := 0; i < 6; i++ {
-											go MakeOrder(&wg, buyOffer["id"].(string), buyOffer["price"].(string), strconv.FormatFloat(canBuy, 'f', -1, 64), asset, spread, profit, ipAddresses_api[i], &order_responses)
-										}
-										amount, _ := strconv.ParseFloat(buyOffer["amount"].(string), 64)
-										price, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
-										minlim, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
-										maxlim, _ := strconv.ParseFloat(buyOffer["maxLimit"].(string), 64)
-										amount_in_rub := math.Round(amount) * math.Round(price)
-										merchant_name := buyOffer["name"].(string)
-										SendWebhookMonitor(math.Round(amount_in_rub), spread, buyOffer["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, fmt.Sprintf("%v", banks_buy), "67008c")
-										wg.Wait()
-
-										orderInfo := make(map[string]interface{})
-										for _, order := range order_responses {
-											if order["success"].(bool) {
-												orderInfo = order
-												break
+							if foundMatch {
+								if buyMaxLimit < float64(user_min_limit) || buyMinLimit > float64(user_max_limit) {
+									continue
+								}
+								spread := math.Round((sellPrice/buyPrice*100-100)*100) / 100
+								canBuy := math.Min(float64(user_max_limit), buyMaxLimit)
+								if spread > 5 {
+									canBuy = math.Min(canBuy, 90000)
+								}
+								if (spread < 5) || (spread > 5 && canBuy <= 90000) {
+									profit := ((canBuy / buyPrice) * sellPrice) - canBuy
+									if last_order_id != buyOffer["id"].(string) {
+										if spread >= float64(need_spread) {
+											last_order_id = buyOffer["id"].(string)
+											var wg sync.WaitGroup
+											wg.Add(6)
+											order_responses := make([]map[string]interface{}, 0)
+											for i := 0; i < 6; i++ {
+												go MakeOrder(&wg, buyOffer["id"].(string), buyOffer["price"].(string), strconv.FormatFloat(canBuy, 'f', -1, 64), asset, spread, profit, ipAddresses_api[i], &order_responses)
 											}
-										}
+											amount, _ := strconv.ParseFloat(buyOffer["amount"].(string), 64)
+											price, _ := strconv.ParseFloat(buyOffer["price"].(string), 64)
+											minlim, _ := strconv.ParseFloat(buyOffer["minLimit"].(string), 64)
+											maxlim, _ := strconv.ParseFloat(buyOffer["maxLimit"].(string), 64)
+											amount_in_rub := math.Round(amount) * math.Round(price)
+											merchant_name := buyOffer["name"].(string)
+											SendWebhookMonitor(math.Round(amount_in_rub), spread, buyOffer["price"].(string), asset, math.Round(minlim), math.Round(maxlim), merchant_name, fmt.Sprintf("%v", banks_buy), "67008c")
+											wg.Wait()
 
-										if len(orderInfo) > 0 {
-											go SendWebhook(orderInfo["message"].(string), orderInfo["totalAmount"].(string), orderInfo["profit"].(float64), orderInfo["spread"].(float64), orderInfo["matchPrice"].(string), orderInfo["time"].(string), orderInfo["elapsed"].(string), orderInfo["localIP"].(string), orderInfo["color"].(string))
-										} else {
-											go SendWebhook(order_responses[0]["message"].(string), order_responses[0]["totalAmount"].(string), order_responses[0]["profit"].(float64), order_responses[0]["spread"].(float64), order_responses[0]["matchPrice"].(string), order_responses[0]["time"].(string), order_responses[0]["elapsed"].(string), order_responses[0]["localIP"].(string), order_responses[0]["color"].(string))
+											orderInfo := make(map[string]interface{})
+											for _, order := range order_responses {
+												if order["success"].(bool) {
+													orderInfo = order
+													break
+												}
+											}
+
+											if len(orderInfo) > 0 {
+												go SendWebhook(orderInfo["message"].(string), orderInfo["totalAmount"].(string), orderInfo["profit"].(float64), orderInfo["spread"].(float64), orderInfo["matchPrice"].(string), orderInfo["time"].(string), orderInfo["elapsed"].(string), orderInfo["localIP"].(string), orderInfo["color"].(string))
+											} else {
+												go SendWebhook(order_responses[0]["message"].(string), order_responses[0]["totalAmount"].(string), order_responses[0]["profit"].(float64), order_responses[0]["spread"].(float64), order_responses[0]["matchPrice"].(string), order_responses[0]["time"].(string), order_responses[0]["elapsed"].(string), order_responses[0]["localIP"].(string), order_responses[0]["color"].(string))
+											}
+											return
 										}
-										return
 									}
 								}
 							}
