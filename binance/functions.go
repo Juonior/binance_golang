@@ -117,7 +117,7 @@ func formatNum(numFloat float64) string {
 	}
 	return formattedStr
 }
-func SendWebhook(status string, amount string, profit float64, spread float64, price string, orderTime, requestTime, ip string, color string) {
+func SendWebhook(url string, status string, amount string, profit float64, spread float64, price string, orderTime, requestTime, ip string, color string) {
 	embed := Embed{
 		Title: fmt.Sprintf("[JP] %v", status),
 		Color: parseColor(color),
@@ -156,7 +156,7 @@ func SendWebhook(status string, amount string, profit float64, spread float64, p
 		return
 	}
 
-	resp, err := http.Post(discordSuccessURL, "application/json", strings.NewReader(string(body)))
+	resp, err := http.Post(url, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		fmt.Println("Error sending webhook:", err)
 		return
