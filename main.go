@@ -6,12 +6,15 @@ import (
 	"time"
 )
 
+var sleepTime float64
+
 func main() {
-	ipAddresses := binance.GetLocalAddresses()[1:]
+	ipAddresses := binance.GetLocalAddresses()
 	binance.CheckToken()
 	fmt.Println(len(ipAddresses), "Local IPS:", ipAddresses)
-	sleepTime, user_min_money, user_max_money, need_spread := binance.GetInfo()
-	fmt.Println(sleepTime, user_min_money, user_max_money, need_spread)
+
+	fmt.Print("Enter cooldown requests (In Millisecond): ")
+	fmt.Scanln(&sleepTime)
 	go binance.CheckSell("USDT", []string{"PostBankNew", "RussianStandardBank"}, "http://zUCkzixB:BFRHq5ne@77.90.160.64:62140")
 	assets := []string{"USDT"}
 	current_ip_num := 0
@@ -22,7 +25,7 @@ func main() {
 			} else {
 				current_ip_num = 0
 			}
-			go binance.CheckAsset(user_min_money, user_max_money, need_spread, asset, []string{"PostBankNew", "RussianStandardBank"}, ipAddresses[current_ip_num])
+			go binance.CheckAsset(1000, 200000, asset, []string{"PostBankNew", "RussianStandardBank"}, ipAddresses[current_ip_num])
 		}
 		duration := time.Duration(sleepTime) * time.Millisecond
 		time.Sleep(duration)
