@@ -15,8 +15,8 @@ func main() {
 
 	fmt.Print("Enter cooldown requests (In Millisecond): ")
 	fmt.Scanln(&sleepTime)
-	go binance.CheckSell("USDT", []string{"PostBankNew", "RussianStandardBank"}, "http://zUCkzixB:BFRHq5ne@77.90.160.64:62140")
-	assets := []string{"USDT"}
+	go binance.CheckSell("ASSET_EXAMPLE", []string{"BANK_EXAMPLE1", "BANK_EXAPMLE2"}, "YOUR PROXIES")
+	assets := []string{"ASSET_EXAMPLE"}
 	current_ip_num := 0
 	for {
 		for _, asset := range assets {
@@ -25,7 +25,7 @@ func main() {
 			} else {
 				current_ip_num = 0
 			}
-			go binance.CheckAsset(1000, 200000, asset, []string{"PostBankNew", "RussianStandardBank"}, ipAddresses[current_ip_num])
+			go binance.CheckAsset(USERMINLIMIT, USERMAXLIMIT, asset, []]string{"BANK_EXAMPLE1", "BANK_EXAPMLE2"}, ipAddresses[current_ip_num])
 		}
 		duration := time.Duration(sleepTime) * time.Millisecond
 		time.Sleep(duration)
