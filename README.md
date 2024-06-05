@@ -2,6 +2,11 @@
 
 ![Go](https://img.shields.io/badge/Go-1.16%2B-blue)
 
+<p align="center">
+  <img src="https://i.imgur.com/4t1dTEP.png" alt="Фотография 1" style="height: 450px; width: 320px; margin: 0 10px;">
+  <img src="https://i.imgur.com/FBu4VR6.png" alt="Фотография 2" style="height: 450px; width: 400px; margin: 0 10px;">
+</p>
+
 ## Описание
 
 Этот проект разработан на Go и предназначен для арбитража криптовалюты на бирже Binance. Он позволяет мониторить стоимость криптовалют в режиме реального времени с заданным интервалом (в миллисекундах) и помогает выполнять арбитражные операции. 
